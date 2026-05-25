@@ -10,7 +10,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
+  /* ================= THEMES ================= */
+  :root, .theme-dark {
     --bg: #0e0c0a;
     --surface: #1a1714;
     --surface-2: #221d18;
@@ -20,14 +21,94 @@
     --text-dim: #8a8278;
     --text-faint: #5a5650;
     --accent: #d4a056;
-    --accent-dim: #a07d3e;
+    --accent-text: #1a1410;
     --danger: #c95d4b;
+    --bg-gradient-1: rgba(212, 160, 86, 0.04);
+    --bg-gradient-2: rgba(212, 160, 86, 0.02);
+    --backdrop: rgba(14, 12, 10, 0.97);
+    --shadow: 0 2px 8px rgba(212, 160, 86, 0.15);
+    --modal-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    --switch-knob-off: var(--text-dim);
+    --badge-low-bg: #1e3a5240;
+    --badge-low-fg: #93c5fd;
+    --badge-low-bd: #2a4a6240;
+    --badge-med-bg: #4a3a1e40;
+    --badge-med-fg: #fcd34d;
+    --badge-med-bd: #5a4a2e40;
+    --badge-hi-bg: #4a202040;
+    --badge-hi-fg: #fca5a5;
+    --badge-hi-bd: #5a303040;
+    --pill-low-bg: #2a3a52;
+    --pill-low-fg: #93c5fd;
+    --pill-low-bd: #3a4a62;
+    --pill-med-bg: #4a3a1e;
+    --pill-med-fg: #fcd34d;
+    --pill-med-bd: #5a4a2e;
+    --pill-hi-bg: #4a2020;
+    --pill-hi-fg: #fca5a5;
+    --pill-hi-bd: #5a3030;
+  }
+
+  .theme-light {
+    --bg: #f7f3ec;
+    --surface: #fdfaf3;
+    --surface-2: #f1ebe0;
+    --border: #e5dccb;
+    --border-strong: #c9bba1;
+    --text: #2a2520;
+    --text-dim: #6e6457;
+    --text-faint: #9a8f7e;
+    --accent: #b07e3a;
+    --accent-text: #fdfaf3;
+    --danger: #b03a2e;
+    --bg-gradient-1: rgba(176, 126, 58, 0.05);
+    --bg-gradient-2: rgba(176, 126, 58, 0.03);
+    --backdrop: rgba(247, 243, 236, 0.97);
+    --shadow: 0 2px 8px rgba(176, 126, 58, 0.18);
+    --modal-shadow: 0 20px 60px rgba(60, 50, 30, 0.18);
+    --switch-knob-off: #b8ad99;
+    --badge-low-bg: #d8e6f4;
+    --badge-low-fg: #2c5586;
+    --badge-low-bd: #b8d0e6;
+    --badge-med-bg: #f5e6c4;
+    --badge-med-fg: #8a6610;
+    --badge-med-bd: #e0c890;
+    --badge-hi-bg: #f4d4d0;
+    --badge-hi-fg: #8e2a20;
+    --badge-hi-bd: #e0b0a8;
+    --pill-low-bg: #d8e6f4;
+    --pill-low-fg: #2c5586;
+    --pill-low-bd: #b8d0e6;
+    --pill-med-bg: #f5e6c4;
+    --pill-med-fg: #8a6610;
+    --pill-med-bd: #e0c890;
+    --pill-hi-bg: #f4d4d0;
+    --pill-hi-fg: #8e2a20;
+    --pill-hi-bd: #e0b0a8;
+  }
+
+  :root {
     --serif: "Fraunces", "Hoefler Text", Georgia, serif;
     --sans: "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    --start-btn-h: 64px;
   }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* Kill native focus outlines; restore subtle ones for keyboard nav */
+  button, select, input, textarea, .chip, .stress-pill, .switch, .segment, [role="button"] {
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button::-moz-focus-inner { border: 0; padding: 0; }
+  button:focus, select:focus, input:focus, textarea:focus, .chip:focus, .segment:focus {
+    outline: none;
+  }
+  /* Keyboard-only focus indicator (subtle, accent-tinted) */
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, .chip:focus-visible, .segment:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
   html, body {
     margin: 0; padding: 0; height: 100%;
     font-family: var(--sans);
@@ -35,30 +116,40 @@
     overflow-x: hidden;
     -webkit-user-select: none; user-select: none;
     font-feature-settings: "ss01", "cv11";
+    transition: background 0.25s ease, color 0.25s ease;
   }
   body {
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     background-image:
-      radial-gradient(ellipse at top, rgba(212, 160, 86, 0.04) 0%, transparent 40%),
-      radial-gradient(ellipse at bottom right, rgba(212, 160, 86, 0.02) 0%, transparent 50%);
+      radial-gradient(ellipse at top, var(--bg-gradient-1) 0%, transparent 40%),
+      radial-gradient(ellipse at bottom right, var(--bg-gradient-2) 0%, transparent 50%);
   }
-  #app { max-width: 640px; margin: 0 auto; padding: 24px 18px 60px; }
+  #app {
+    max-width: 640px; margin: 0 auto;
+    padding: 20px 16px calc(var(--start-btn-h) + 40px + env(safe-area-inset-bottom));
+  }
 
+  /* ================= HEADER ================= */
   .app-header {
-    display: flex; align-items: baseline; justify-content: space-between;
-    margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
   }
   .app-title {
     font-family: var(--serif); font-weight: 400; font-style: italic;
-    font-size: 28px; letter-spacing: -0.5px; margin: 0;
+    font-size: 22px; letter-spacing: -0.3px; margin: 0;
     font-variation-settings: "opsz" 144;
   }
-  .app-subtitle {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
-    text-transform: uppercase; color: var(--text-faint);
+  .theme-toggle {
+    width: 36px; height: 36px; border-radius: 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; line-height: 1;
   }
+  .theme-toggle:active { background: var(--surface-2); }
 
-  .section { margin-bottom: 20px; }
+  /* ================= SECTIONS ================= */
+  .section { margin-bottom: 18px; }
   .section-label {
     font-family: var(--mono); font-size: 10px; font-weight: 500;
     letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim);
@@ -75,19 +166,77 @@
     padding: 14px;
   }
 
+  /* Collapsible section */
+  .collapse-header {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; padding: 8px 0;
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim);
+  }
+  .collapse-header .collapse-chevron {
+    font-size: 11px; transition: transform 0.2s; color: var(--text-faint);
+    margin-left: 8px;
+  }
+  .collapse-section.open .collapse-chevron { transform: rotate(90deg); }
+  .collapse-header-line {
+    flex: 1; height: 1px; background: var(--border); margin: 0 10px;
+  }
+  .collapse-body { display: none; margin-top: 8px; }
+  .collapse-section.open .collapse-body { display: block; }
+  .collapse-action {
+    background: transparent; border: none; color: var(--text-faint);
+    font-family: var(--sans); font-size: 11px; cursor: pointer;
+    padding: 4px 8px; margin-left: 4px;
+    text-transform: none; letter-spacing: 0;
+  }
+  .collapse-action:active { color: var(--danger); }
+
+  /* ================= CHIPS ================= */
   .row { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
-    padding: 8px 13px; border-radius: 6px; background: var(--surface-2);
+    padding: 9px 13px; border-radius: 6px; background: var(--surface-2);
     color: var(--text-dim); font-family: var(--mono); font-size: 13px;
     font-weight: 500; cursor: pointer; border: 1px solid var(--border);
     transition: all 0.15s ease;
-    min-width: 42px; text-align: center;
+    text-align: center;
   }
   .chip:active { transform: scale(0.96); }
   .chip.active {
-    background: var(--accent); color: #1a1410; border-color: var(--accent);
+    background: var(--accent); color: var(--accent-text); border-color: var(--accent);
     font-weight: 600;
   }
+
+  /* Quality: 2x2 grid */
+  .row.grid-2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  }
+  /* Inversion: 3 even */
+  .row.grid-3 {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+  }
+  .row.grid-2 .chip, .row.grid-3 .chip {
+    padding: 9px 4px; min-width: 0;
+  }
+
+  /* Quality + Inversion chips: fill width evenly */
+  .row.fill .chip {
+    flex: 1; min-width: 0;
+  }
+
+  /* Root chips: two rows with bigger tap targets */
+  .root-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+  }
+  .root-grid .chip {
+    padding: 12px 2px;
+    font-size: 14px;
+    min-width: 0;
+    min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* 15 chips: 8 + 7 layout naturally — last row's 8th cell is empty */
 
   .preset-row {
     display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
@@ -97,18 +246,11 @@
     background: transparent; color: var(--accent); border: 1px solid var(--border-strong);
     font-family: var(--sans); font-size: 12px; font-weight: 500;
     text-transform: lowercase; letter-spacing: 0.3px;
+    padding: 6px 11px;
   }
   .chip.preset:active { background: var(--surface-2); }
 
-  /* Spelling segment control */
-  .spelling-row {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed var(--border);
-  }
-  .spelling-label {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
-    text-transform: uppercase; color: var(--text-faint);
-  }
+  /* Segment control (generic) */
   .segment-control {
     display: flex; background: var(--surface-2); border-radius: 6px;
     border: 1px solid var(--border); padding: 2px;
@@ -118,25 +260,47 @@
     letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim);
     cursor: pointer; border-radius: 4px; transition: all 0.15s;
   }
-  .segment.active { background: var(--accent); color: #1a1410; font-weight: 600; }
+  .segment.active { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 
-  /* Form rows */
+  /* ================= SIDE-BY-SIDE ================= */
+  .two-col {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+
+  /* ================= FORM ROWS ================= */
   .form-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 0; border-bottom: 1px solid var(--border);
-    min-height: 52px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    min-height: 48px; gap: 10px;
   }
   .form-row:last-child { border-bottom: none; }
   .form-row label {
     font-size: 14px; color: var(--text); font-weight: 400;
   }
   .form-row select {
-    padding: 9px 30px 9px 12px; border-radius: 6px;
+    padding: 8px 28px 8px 12px; border-radius: 6px;
     background: var(--surface-2); color: var(--text);
     border: 1px solid var(--border); font-family: var(--sans); font-size: 14px;
     appearance: none; -webkit-appearance: none; cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238a8278' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .theme-dark .form-row select,
+  .theme-dark #mode-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238a8278' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  }
+  .theme-light .form-row select,
+  .theme-light #mode-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236e6457' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  }
+  #mode-select { background-repeat: no-repeat; background-position: right 10px center; }
+
+  /* Combined mode + target row */
+  .mode-target-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; gap: 10px; min-height: 48px;
+  }
+  .mode-target-row .mode-target-controls {
+    display: flex; gap: 8px; align-items: center;
   }
 
   /* iOS-style stepper */
@@ -147,14 +311,13 @@
   }
   .stepper button {
     background: transparent; border: none; color: var(--text);
-    width: 38px; height: 100%; font-size: 20px; font-weight: 300;
+    width: 36px; height: 100%; font-size: 20px; font-weight: 300;
     cursor: pointer; font-family: var(--mono); line-height: 1;
-    transition: background 0.1s;
   }
   .stepper button:active { background: var(--border); }
   .stepper button:disabled { color: var(--text-faint); cursor: default; }
   .stepper .stepper-value {
-    min-width: 56px; text-align: center;
+    min-width: 50px; text-align: center;
     font-family: var(--mono); font-size: 14px; font-weight: 500;
     color: var(--text);
     border-left: 1px solid var(--border); border-right: 1px solid var(--border);
@@ -162,7 +325,7 @@
     padding: 0 4px; cursor: pointer;
   }
   .stepper input {
-    min-width: 56px; max-width: 70px; text-align: center;
+    min-width: 50px; max-width: 66px; text-align: center;
     font-family: var(--mono); font-size: 14px; font-weight: 500;
     color: var(--text); background: var(--bg);
     border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
@@ -173,19 +336,19 @@
 
   /* Switch */
   .switch {
-    position: relative; width: 50px; height: 30px;
-    background: var(--surface-2); border-radius: 15px;
+    position: relative; width: 42px; height: 24px;
+    background: var(--surface-2); border-radius: 12px;
     cursor: pointer; border: 1px solid var(--border);
     transition: background 0.2s;
     flex-shrink: 0;
   }
   .switch::after {
-    content: ''; position: absolute; top: 2px; left: 2px;
-    width: 24px; height: 24px; border-radius: 50%;
-    background: var(--text-dim); transition: all 0.2s ease;
+    content: ''; position: absolute; top: 1px; left: 1px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--switch-knob-off); transition: all 0.2s ease;
   }
   .switch.on { background: var(--accent); border-color: var(--accent); }
-  .switch.on::after { left: 22px; background: #1a1410; }
+  .switch.on::after { left: 19px; background: var(--accent-text); }
 
   /* Focus items */
   .focus-list { display: flex; flex-direction: column; gap: 8px; }
@@ -201,9 +364,14 @@
     background: var(--bg); color: var(--text); border: 1px solid var(--border);
     font-size: 13px; font-family: var(--sans);
     appearance: none; -webkit-appearance: none; cursor: pointer;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238a8278' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 8px center;
     min-width: 0;
+  }
+  .theme-dark .focus-item select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238a8278' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  }
+  .theme-light .focus-item select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236e6457' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
   }
   .focus-item .delete {
     background: transparent; border: 1px solid var(--border);
@@ -222,9 +390,9 @@
     text-transform: uppercase; color: var(--text-faint);
     cursor: pointer; text-align: center;
   }
-  .stress-pill.active.low { background: #2a3a52; color: #93c5fd; border-color: #3a4a62; }
-  .stress-pill.active.medium { background: #4a3a1e; color: #fcd34d; border-color: #5a4a2e; }
-  .stress-pill.active.high { background: #4a2020; color: #fca5a5; border-color: #5a3030; }
+  .stress-pill.active.low { background: var(--pill-low-bg); color: var(--pill-low-fg); border-color: var(--pill-low-bd); }
+  .stress-pill.active.medium { background: var(--pill-med-bg); color: var(--pill-med-fg); border-color: var(--pill-med-bd); }
+  .stress-pill.active.high { background: var(--pill-hi-bg); color: var(--pill-hi-fg); border-color: var(--pill-hi-bd); }
 
   .add-focus {
     width: 100%; padding: 12px; border-radius: 8px; margin-top: 8px;
@@ -233,33 +401,45 @@
   }
   .add-focus:active { background: var(--surface-2); }
 
-  /* Buttons */
+  /* ================= STICKY START BUTTON ================= */
+  .start-bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
+    z-index: 50;
+    pointer-events: none;
+  }
+  body.session-active .start-bar { display: none; }
+  .start-bar-inner {
+    max-width: 640px; margin: 0 auto;
+    pointer-events: auto;
+  }
   .btn-primary {
     width: 100%; padding: 16px; border-radius: 10px;
-    background: var(--accent); color: #1a1410;
+    background: var(--accent); color: var(--accent-text);
     font-family: var(--sans); font-size: 15px; font-weight: 600;
     letter-spacing: 0.3px; border: none; cursor: pointer;
-    margin-top: 16px;
-    box-shadow: 0 2px 8px rgba(212, 160, 86, 0.15);
+    box-shadow: var(--shadow);
+    height: var(--start-btn-h);
   }
   .btn-primary:active { transform: scale(0.98); }
   .btn-primary:disabled {
     background: var(--surface-2); color: var(--text-faint); box-shadow: none;
   }
 
-  /* Flashcard view */
+  /* ================= FLASHCARD VIEW ================= */
   #flashcard-view {
     position: fixed; inset: 0; background: var(--bg); display: none;
     flex-direction: column;
     padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
     background-image:
-      radial-gradient(ellipse at center, rgba(212, 160, 86, 0.05) 0%, transparent 60%);
+      radial-gradient(ellipse at center, var(--bg-gradient-1) 0%, transparent 60%);
   }
   #flashcard-view.active { display: flex; }
 
   .flash-header {
     display: flex; justify-content: space-between; align-items: flex-start;
-    padding-top: 18px; padding-bottom: 14px;
+    padding-top: 14px; padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
     gap: 12px;
   }
@@ -275,7 +455,7 @@
   .stat-value { color: var(--text); font-weight: 500; font-size: 13px; }
 
   .metronome-indicator {
-    display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
     cursor: pointer;
   }
   .metronome-display {
@@ -301,20 +481,20 @@
   .metro-panel {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px; display: none;
-    margin-top: 6px;
+    margin-top: 4px;
     min-width: 180px;
   }
   .metro-panel.open { display: block; }
   .metro-panel-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 6px 0; gap: 10px;
+    padding: 5px 0; gap: 10px;
   }
   .metro-panel-row label {
     font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
     text-transform: uppercase; color: var(--text-faint);
   }
-  .metro-panel .switch { width: 38px; height: 22px; }
-  .metro-panel .switch::after { width: 16px; height: 16px; }
+  .metro-panel .switch { width: 36px; height: 20px; }
+  .metro-panel .switch::after { width: 14px; height: 14px; }
   .metro-panel .switch.on::after { left: 18px; }
 
   .flash-card {
@@ -361,25 +541,26 @@
     letter-spacing: 2px; text-transform: uppercase;
   }
   .card-focus-badge.empty { display: none; }
-  .badge-low { background: #1e3a5240; color: #93c5fd; border: 1px solid #2a4a6240; }
-  .badge-medium { background: #4a3a1e40; color: #fcd34d; border: 1px solid #5a4a2e40; }
-  .badge-high { background: #4a202040; color: #fca5a5; border: 1px solid #5a303040; }
+  .badge-low { background: var(--badge-low-bg); color: var(--badge-low-fg); border: 1px solid var(--badge-low-bd); }
+  .badge-medium { background: var(--badge-med-bg); color: var(--badge-med-fg); border: 1px solid var(--badge-med-bd); }
+  .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
 
   .flash-footer {
-    display: flex; gap: 10px; padding-bottom: 12px; padding-top: 12px;
+    display: flex; gap: 10px; padding-bottom: 10px; padding-top: 10px;
     border-top: 1px solid var(--border);
   }
   .flash-footer button {
-    flex: 1; padding: 14px; border-radius: 8px; border: 1px solid var(--border);
+    flex: 1; padding: 13px; border-radius: 8px; border: 1px solid var(--border-strong);
     font-family: var(--sans); font-size: 14px; font-weight: 500;
     cursor: pointer; letter-spacing: 0.3px;
+    background: var(--surface);
   }
-  .btn-pause { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
-  .btn-end { background: var(--surface); color: var(--danger); border-color: var(--border-strong); }
+  .btn-pause { color: var(--text); }
+  .btn-end { color: var(--danger); }
 
   /* Pause overlay */
   #pause-overlay {
-    position: fixed; inset: 0; background: rgba(14, 12, 10, 0.97);
+    position: fixed; inset: 0; background: var(--backdrop);
     backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
     display: none; flex-direction: column;
     padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); z-index: 10;
@@ -388,7 +569,7 @@
   .pause-header {
     font-family: var(--serif); font-style: italic; font-weight: 400;
     font-size: 28px; margin-top: 32px; margin-bottom: 4px;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.5px; color: var(--text);
   }
   .pause-subhead {
     font-family: var(--mono); font-size: 10px; letter-spacing: 2px;
@@ -404,7 +585,7 @@
   #pause-overlay textarea:focus { outline: none; border-color: var(--accent); }
   .pause-actions { display: flex; gap: 10px; margin-top: 12px; }
   .pause-actions button { flex: 1; padding: 13px; border-radius: 8px; font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; }
-  .btn-save { background: var(--accent); color: #1a1410; border: none; }
+  .btn-save { background: var(--accent); color: var(--accent-text); border: none; }
   .btn-resume { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
 
   .notes-list { margin-top: 20px; flex: 1; overflow-y: auto; padding-bottom: 20px; }
@@ -427,9 +608,8 @@
     background: var(--surface); padding: 14px;
     border-radius: 8px; margin-bottom: 8px; cursor: pointer;
     border: 1px solid var(--border);
-    transition: border-color 0.15s;
+    position: relative;
   }
-  .history-item:active { border-color: var(--border-strong); }
   .history-top {
     display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
   }
@@ -447,7 +627,7 @@
   }
   .history-config {
     font-family: var(--mono); font-size: 10px; color: var(--text-dim);
-    margin-top: 6px; letter-spacing: 0.5px;
+    margin-top: 5px; letter-spacing: 0.5px;
   }
   .history-notes { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   .history-item.expanded .history-notes { display: block; }
@@ -458,10 +638,18 @@
     font-family: var(--mono); font-size: 10px; color: var(--text-faint);
     letter-spacing: 1px; margin-bottom: 3px;
   }
+  .history-delete {
+    display: none; margin-top: 12px; padding: 8px 12px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--danger); font-family: var(--sans); font-size: 12px;
+    border-radius: 6px; cursor: pointer; align-self: flex-start;
+  }
+  .history-delete:active { background: var(--surface-2); }
+  .history-item.expanded .history-delete { display: inline-block; }
 
   .empty {
-    color: var(--text-faint); font-size: 13px; text-align: center;
-    padding: 24px; font-style: italic;
+    color: var(--text-faint); font-size: 12px; text-align: center;
+    padding: 16px; font-style: italic;
   }
 
   /* Modal dialog */
@@ -471,15 +659,16 @@
     display: none; align-items: center; justify-content: center;
     z-index: 100; padding: 24px;
   }
+  .theme-light .modal-backdrop { background: rgba(40, 30, 15, 0.35); }
   .modal-backdrop.active { display: flex; }
   .modal {
     background: var(--surface); border: 1px solid var(--border-strong);
     border-radius: 14px; padding: 24px; max-width: 360px; width: 100%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    box-shadow: var(--modal-shadow);
   }
   .modal-title {
     font-family: var(--serif); font-style: italic; font-size: 22px;
-    margin: 0 0 8px; letter-spacing: -0.3px;
+    margin: 0 0 8px; letter-spacing: -0.3px; color: var(--text);
   }
   .modal-body {
     font-size: 14px; color: var(--text-dim); line-height: 1.5; margin-bottom: 18px;
@@ -489,7 +678,7 @@
     flex: 1; padding: 12px; border-radius: 8px; font-family: var(--sans);
     font-size: 14px; font-weight: 500; cursor: pointer; border: none;
   }
-  .modal-btn-primary { background: var(--accent); color: #1a1410; }
+  .modal-btn-primary { background: var(--accent); color: var(--accent-text); }
   .modal-btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border) !important; }
   .modal-btn-danger { background: var(--danger); color: #fff; }
 
@@ -498,137 +687,181 @@
     100% { opacity: 1; transform: translateY(0); }
   }
   .flash-card.transition { animation: flashFade 0.18s ease-out; }
+
+  /* Tighter on narrow phones */
+  @media (max-width: 380px) {
+    .root-grid .chip { padding: 11px 0; font-size: 13px; min-height: 42px; }
+    .chip.preset { padding: 5px 9px; font-size: 11px; }
+    .segment { padding: 5px 9px; font-size: 10px; }
+  }
 </style>
 </head>
-<body>
+<body class="theme-dark">
 
 <div id="app">
   <div class="app-header">
     <h1 class="app-title">Triad Trainer</h1>
-    <span class="app-subtitle">Practice</span>
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">◐</button>
   </div>
 
+  <!-- Roots -->
   <div class="section">
     <div class="section-label">Roots</div>
     <div class="panel">
       <div class="preset-row" id="root-presets">
-        <button class="chip preset" data-preset="all">all 12</button>
-        <button class="chip preset" data-preset="naturals">natural keys</button>
-        <button class="chip preset" data-preset="sharps">sharp keys</button>
-        <button class="chip preset" data-preset="flats">flat keys</button>
+        <button class="chip preset" data-preset="all">all</button>
+        <button class="chip preset" data-preset="naturals">naturals</button>
+        <button class="chip preset" data-preset="sharps">sharps</button>
+        <button class="chip preset" data-preset="flats">flats</button>
         <button class="chip preset" data-preset="clear">clear</button>
       </div>
-      <div class="spelling-row">
-        <span class="spelling-label">Spelling</span>
-        <div class="segment-control" id="spelling-control">
-          <div class="segment" data-spelling="mixed">Mixed</div>
-          <div class="segment" data-spelling="sharps">Sharps</div>
-          <div class="segment" data-spelling="flats">Flats</div>
-        </div>
+      <div class="root-grid" id="root-chips"></div>
+    </div>
+  </div>
+
+  <!-- Quality + Inversion side by side -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-label">Quality</div>
+      <div class="panel">
+        <div class="row grid-2" id="quality-chips"></div>
       </div>
-      <div class="row" id="root-chips"></div>
+    </div>
+    <div class="section">
+      <div class="section-label">Inversion</div>
+      <div class="panel">
+        <div class="row grid-3" id="inversion-chips"></div>
+      </div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-label">Quality</div>
-    <div class="panel">
-      <div class="row" id="quality-chips"></div>
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-label">Inversion</div>
-    <div class="panel">
-      <div class="row" id="inversion-chips"></div>
-    </div>
-  </div>
-
+  <!-- Session: Mode + Target combined -->
   <div class="section">
     <div class="section-label">Session</div>
     <div class="panel">
-      <div class="form-row">
-        <label>Mode</label>
-        <select id="mode-select">
+      <div class="mode-target-row">
+        <select id="mode-select" style="padding: 8px 28px 8px 12px; border-radius: 6px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-family: var(--sans); font-size: 14px; appearance: none; -webkit-appearance: none; cursor: pointer;">
           <option value="count">Reps</option>
-          <option value="time">Time</option>
+          <option value="time">Minutes</option>
         </select>
-      </div>
-      <div class="form-row" id="count-row">
-        <label>Target reps</label>
-        <div class="stepper" id="count-stepper" data-min="1" data-max="999" data-step="5"></div>
-      </div>
-      <div class="form-row" id="time-row" style="display:none;">
-        <label>Minutes</label>
-        <div class="stepper" id="time-stepper" data-min="1" data-max="120" data-step="1"></div>
-      </div>
-      <div class="form-row">
-        <label>Advance</label>
-        <select id="advance-select">
-          <option value="manual">Tap card</option>
-          <option value="seconds">Every N seconds</option>
-          <option value="beats">Every N beats</option>
-          <option value="bars">Every N bars</option>
-        </select>
-      </div>
-      <div class="form-row" id="seconds-row" style="display:none;">
-        <label>Seconds / card</label>
-        <div class="stepper" id="seconds-stepper" data-min="1" data-max="60" data-step="1"></div>
-      </div>
-      <div class="form-row" id="beats-row" style="display:none;">
-        <label>Beats / card</label>
-        <div class="stepper" id="beats-stepper" data-min="1" data-max="64" data-step="1"></div>
-      </div>
-      <div class="form-row" id="bars-row" style="display:none;">
-        <label>Bars / card</label>
-        <div class="stepper" id="bars-stepper" data-min="1" data-max="32" data-step="1"></div>
+        <div class="mode-target-controls">
+          <div class="stepper" id="count-stepper" data-min="1" data-max="999" data-step="5" style="display:flex;"></div>
+          <div class="stepper" id="time-stepper" data-min="1" data-max="120" data-step="1" style="display:none;"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-label">Metronome</div>
-    <div class="panel">
-      <div class="form-row">
-        <label>Enabled</label>
-        <div class="switch" id="metro-switch"></div>
-      </div>
-      <div class="form-row" id="bpm-row" style="display:none;">
-        <label>BPM</label>
-        <div class="stepper" id="bpm-stepper" data-min="30" data-max="240" data-step="2"></div>
-      </div>
-      <div class="form-row" id="meter-row" style="display:none;">
-        <label>Time signature</label>
-        <select id="meter-select">
-          <option value="2">2/4</option>
-          <option value="3">3/4</option>
-          <option value="4" selected>4/4</option>
-          <option value="5">5/4</option>
-          <option value="6">6/8</option>
-          <option value="7">7/4</option>
-        </select>
-      </div>
-      <div class="form-row" id="accent-row" style="display:none;">
-        <label>Accent downbeat</label>
-        <div class="switch on" id="accent-switch"></div>
+  <!-- Advance options: collapsible -->
+  <div class="section collapse-section" id="advance-section">
+    <div class="collapse-header" data-target="advance-section">
+      <span>Advance</span>
+      <div class="collapse-header-line"></div>
+      <span class="collapse-meta" id="advance-meta" style="font-family: var(--mono); font-size: 10px; color: var(--text-faint); letter-spacing: 1px; text-transform: none; margin-right: 4px;">Tap card</span>
+      <span class="collapse-chevron">›</span>
+    </div>
+    <div class="collapse-body">
+      <div class="panel">
+        <div class="form-row">
+          <label>Mode</label>
+          <select id="advance-select">
+            <option value="manual">Tap card</option>
+            <option value="seconds">Every N seconds</option>
+            <option value="beats">Every N beats</option>
+            <option value="bars">Every N bars</option>
+          </select>
+        </div>
+        <div class="form-row" id="seconds-row" style="display:none;">
+          <label>Seconds / card</label>
+          <div class="stepper" id="seconds-stepper" data-min="1" data-max="60" data-step="1"></div>
+        </div>
+        <div class="form-row" id="beats-row" style="display:none;">
+          <label>Beats / card</label>
+          <div class="stepper" id="beats-stepper" data-min="1" data-max="64" data-step="1"></div>
+        </div>
+        <div class="form-row" id="bars-row" style="display:none;">
+          <label>Bars / card</label>
+          <div class="stepper" id="bars-stepper" data-min="1" data-max="32" data-step="1"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-label">Focus items</div>
-    <div id="focus-list" class="focus-list"></div>
-    <button class="add-focus" id="add-focus-btn">+ add focus item</button>
+  <!-- Metronome: collapsible -->
+  <div class="section collapse-section" id="metronome-section">
+    <div class="collapse-header" data-target="metronome-section">
+      <span>Metronome</span>
+      <div class="collapse-header-line"></div>
+      <span class="collapse-meta" id="metro-meta" style="font-family: var(--mono); font-size: 10px; color: var(--text-faint); letter-spacing: 1px; text-transform: none; margin-right: 4px;">Off</span>
+      <span class="collapse-chevron">›</span>
+    </div>
+    <div class="collapse-body">
+      <div class="panel">
+        <div class="form-row">
+          <label>Enabled</label>
+          <div class="switch" id="metro-switch"></div>
+        </div>
+        <div class="form-row" id="bpm-row" style="display:none;">
+          <label>BPM</label>
+          <div class="stepper" id="bpm-stepper" data-min="30" data-max="240" data-step="2"></div>
+        </div>
+        <div class="form-row" id="meter-row" style="display:none;">
+          <label>Time signature</label>
+          <select id="meter-select">
+            <option value="2">2/4</option>
+            <option value="3">3/4</option>
+            <option value="4" selected>4/4</option>
+            <option value="5">5/4</option>
+            <option value="6">6/8</option>
+            <option value="7">7/4</option>
+          </select>
+        </div>
+        <div class="form-row" id="accent-row" style="display:none;">
+          <label>Accent downbeat</label>
+          <div class="switch on" id="accent-switch"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <button class="btn-primary" id="start-btn">Begin session</button>
+  <!-- Focus items: collapsible -->
+  <div class="section collapse-section" id="focus-section">
+    <div class="collapse-header" data-target="focus-section">
+      <span>Focus items</span>
+      <div class="collapse-header-line"></div>
+      <span class="collapse-meta" id="focus-meta" style="font-family: var(--mono); font-size: 10px; color: var(--text-faint); letter-spacing: 1px; text-transform: none; margin-right: 4px;">0</span>
+      <span class="collapse-chevron">›</span>
+    </div>
+    <div class="collapse-body">
+      <div id="focus-list" class="focus-list"></div>
+      <button class="add-focus" id="add-focus-btn">+ add focus item</button>
+    </div>
+  </div>
 
-  <div class="section" style="margin-top: 40px;">
-    <div class="section-label">History</div>
-    <div id="history-list"></div>
+  <!-- History: collapsible -->
+  <div class="section collapse-section" id="history-section">
+    <div class="collapse-header" data-target="history-section">
+      <span>History</span>
+      <div class="collapse-header-line"></div>
+      <button class="collapse-action" id="history-clear-btn" style="display:none;">Clear</button>
+      <span class="collapse-meta" id="history-meta" style="font-family: var(--mono); font-size: 10px; color: var(--text-faint); letter-spacing: 1px; text-transform: none; margin-right: 4px;">0</span>
+      <span class="collapse-chevron">›</span>
+    </div>
+    <div class="collapse-body">
+      <div id="history-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Sticky start button -->
+<div class="start-bar">
+  <div class="start-bar-inner">
+    <button class="btn-primary" id="start-btn">Begin session</button>
   </div>
 </div>
 
+<!-- Flashcard view -->
 <div id="flashcard-view">
   <div class="flash-header">
     <div class="flash-stats">
@@ -670,6 +903,7 @@
   </div>
 </div>
 
+<!-- Pause overlay -->
 <div id="pause-overlay">
   <div class="pause-header">Paused</div>
   <div class="pause-subhead">Capture a thought</div>
@@ -692,28 +926,31 @@
 
 <script>
 // ============================================================
-// Data
+// Data — spelling roster
 // ============================================================
-// Pitch classes 0-11, with sharp and flat spellings
-const PITCHES = [
-  { sharp: 'C',  flat: 'C',  natural: true  },
-  { sharp: 'C#', flat: 'Db', natural: false },
-  { sharp: 'D',  flat: 'D',  natural: true  },
-  { sharp: 'D#', flat: 'Eb', natural: false },
-  { sharp: 'E',  flat: 'E',  natural: true  },
-  { sharp: 'F',  flat: 'F',  natural: true  },
-  { sharp: 'F#', flat: 'Gb', natural: false },
-  { sharp: 'G',  flat: 'G',  natural: true  },
-  { sharp: 'G#', flat: 'Ab', natural: false },
-  { sharp: 'A',  flat: 'A',  natural: true  },
-  { sharp: 'A#', flat: 'Bb', natural: false },
-  { sharp: 'B',  flat: 'B',  natural: true  }
+// Each entry is a distinct selectable spelling. Same pitch class
+// can appear twice with different spellings (e.g. C# and Db).
+const SPELLINGS = [
+  { id: 'C',  display: 'C'  },
+  { id: 'C#', display: 'C#' },
+  { id: 'Db', display: 'Db' },
+  { id: 'D',  display: 'D'  },
+  { id: 'Eb', display: 'Eb' },
+  { id: 'E',  display: 'E'  },
+  { id: 'F',  display: 'F'  },
+  { id: 'F#', display: 'F#' },
+  { id: 'Gb', display: 'Gb' },
+  { id: 'G',  display: 'G'  },
+  { id: 'G#', display: 'G#' },
+  { id: 'Ab', display: 'Ab' },
+  { id: 'A',  display: 'A'  },
+  { id: 'Bb', display: 'Bb' },
+  { id: 'B',  display: 'B'  }
 ];
-// Indices for grouping
-const NATURAL_IDX = [0, 2, 4, 5, 7, 9, 11];   // C D E F G A B
-const SHARP_IDX   = [1, 3, 6, 8, 10];          // C# D# F# G# A#
-const FLAT_IDX    = [1, 3, 6, 8, 10];          // Same pitches, flat-spelled
-const ALL_IDX     = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const SPELLING_IDS = SPELLINGS.map(s => s.id);
+const NATURAL_IDS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const SHARP_IDS = ['C#', 'F#', 'G#'];
+const FLAT_IDS = ['Db', 'Eb', 'Gb', 'Ab', 'Bb'];
 
 const QUALITIES = ['major', 'minor', 'diminished', 'augmented'];
 const INVERSIONS = ['root', '1st', '2nd'];
@@ -723,20 +960,13 @@ const STRESS_WEIGHTS = { low: 2, medium: 3, high: 5 };
 // State
 // ============================================================
 const state = {
-  selectedPitches: new Set(ALL_IDX),
-  spelling: 'mixed', // 'mixed' | 'sharps' | 'flats'
+  selectedSpellings: new Set(SPELLING_IDS),
   selectedQualities: new Set(['major', 'minor']),
   selectedInversions: new Set(['root']),
   focusItems: [],
   metronome: { enabled: false, bpm: 80, meter: 4, accent: true },
-  steppers: {
-    count: 50,
-    time: 10,
-    seconds: 4,
-    beats: 4,
-    bars: 1,
-    bpm: 80
-  },
+  steppers: { count: 50, time: 10, seconds: 4, beats: 4, bars: 1, bpm: 80 },
+  theme: 'dark',
   session: null
 };
 
@@ -745,26 +975,16 @@ const state = {
 // ============================================================
 const $ = (id) => document.getElementById(id);
 
-function spellPitch(idx, spelling) {
-  const p = PITCHES[idx];
-  if (p.natural) return p.sharp; // same in both
-  if (spelling === 'flats') return p.flat;
-  if (spelling === 'sharps') return p.sharp;
-  // mixed: jazz-ish default — Eb, Ab, Bb flat; C#, F# sharp
-  const mixedFlat = [3, 8, 10]; // D#/Eb, G#/Ab, A#/Bb
-  return mixedFlat.includes(idx) ? p.flat : p.sharp;
+function formatSpellingHTML(id) {
+  if (id.includes('#')) return id[0] + '<span style="margin-left:1px;">♯</span>';
+  if (id.length > 1 && id[1] === 'b') return id[0] + '<span style="margin-left:1px;">♭</span>';
+  return id;
 }
 
-function formatPitchHTML(name) {
-  if (name.includes('#')) return name[0] + '<span style="margin-left:1px;">♯</span>';
-  if (name.length > 1 && name[1] === 'b') return name[0] + '<span style="margin-left:1px;">♭</span>';
-  return name;
-}
-
-function formatPitchDisplay(name) {
-  if (name.includes('#')) return name[0] + '<span class="accidental">♯</span>';
-  if (name.length > 1 && name[1] === 'b') return name[0] + '<span class="accidental">♭</span>';
-  return name;
+function formatSpellingDisplay(id) {
+  if (id.includes('#')) return id[0] + '<span class="accidental">♯</span>';
+  if (id.length > 1 && id[1] === 'b') return id[0] + '<span class="accidental">♭</span>';
+  return id;
 }
 
 function formatInversion(i) {
@@ -799,7 +1019,8 @@ function buildStepper(elId, value, onChange) {
     newVal = Math.max(min, Math.min(max, newVal));
     if (newVal === current) return;
     current = newVal;
-    valueEl.textContent = current;
+    const cur = el.querySelector('.stepper-value');
+    if (cur) cur.textContent = current;
     onChange(current);
     minusBtn.disabled = current <= min;
     plusBtn.disabled = current >= max;
@@ -827,37 +1048,38 @@ function buildStepper(elId, value, onChange) {
     plusBtn.addEventListener(evt, stopHold);
   });
 
-  // Tap value to edit
-  valueEl.addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.value = current;
-    input.min = min;
-    input.max = max;
-    valueEl.replaceWith(input);
-    input.focus();
-    input.select();
+  const attachValueClick = (node) => {
+    node.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.value = current;
+      input.min = min;
+      input.max = max;
+      node.replaceWith(input);
+      input.focus();
+      input.select();
 
-    const commit = () => {
-      const v = parseInt(input.value);
-      const newVal = isNaN(v) ? current : Math.max(min, Math.min(max, v));
-      const newValueEl = document.createElement('div');
-      newValueEl.className = 'stepper-value';
-      newValueEl.textContent = newVal;
-      newValueEl.addEventListener('click', () => valueEl.click());
-      input.replaceWith(newValueEl);
-      current = newVal;
-      onChange(current);
-    };
-    input.addEventListener('blur', commit);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') input.blur();
-      if (e.key === 'Escape') {
-        input.value = current;
-        input.blur();
-      }
+      const commit = () => {
+        const v = parseInt(input.value);
+        const newVal = isNaN(v) ? current : Math.max(min, Math.min(max, v));
+        const newValueEl = document.createElement('div');
+        newValueEl.className = 'stepper-value';
+        newValueEl.textContent = newVal;
+        attachValueClick(newValueEl);
+        input.replaceWith(newValueEl);
+        current = newVal;
+        onChange(current);
+        minusBtn.disabled = current <= min;
+        plusBtn.disabled = current >= max;
+      };
+      input.addEventListener('blur', commit);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') { input.value = current; input.blur(); }
+      });
     });
-  });
+  };
+  attachValueClick(valueEl);
 
   minusBtn.disabled = current <= min;
   plusBtn.disabled = current >= max;
@@ -871,23 +1093,16 @@ function buildStepper(elId, value, onChange) {
 function renderRootChips() {
   const c = $('root-chips');
   c.innerHTML = '';
-  PITCHES.forEach((p, idx) => {
-    const name = spellPitch(idx, state.spelling);
+  SPELLINGS.forEach((s) => {
     const b = document.createElement('button');
-    b.className = 'chip' + (state.selectedPitches.has(idx) ? ' active' : '');
-    b.innerHTML = formatPitchHTML(name);
+    b.className = 'chip' + (state.selectedSpellings.has(s.id) ? ' active' : '');
+    b.innerHTML = formatSpellingHTML(s.id);
     b.onclick = () => {
-      if (state.selectedPitches.has(idx)) state.selectedPitches.delete(idx);
-      else state.selectedPitches.add(idx);
+      if (state.selectedSpellings.has(s.id)) state.selectedSpellings.delete(s.id);
+      else state.selectedSpellings.add(s.id);
       renderRootChips();
     };
     c.appendChild(b);
-  });
-}
-
-function renderSpellingControl() {
-  document.querySelectorAll('#spelling-control .segment').forEach(s => {
-    s.classList.toggle('active', s.dataset.spelling === state.spelling);
   });
 }
 
@@ -922,13 +1137,12 @@ function renderFocusList() {
   state.focusItems.forEach((f, idx) => {
     const row = document.createElement('div');
     row.className = 'focus-item';
-    // f.pitchIdx is the pitch class index
-    const pitchOpts = PITCHES.map((p, i) =>
-      `<option value="${i}" ${i === f.pitchIdx ? 'selected' : ''}>${spellPitch(i, state.spelling)}</option>`
+    const spellingOpts = SPELLINGS.map(s =>
+      `<option value="${s.id}" ${s.id === f.spelling ? 'selected' : ''}>${s.display}</option>`
     ).join('');
     row.innerHTML = `
       <div class="focus-item-top">
-        <select data-idx="${idx}" data-key="pitchIdx">${pitchOpts}</select>
+        <select data-idx="${idx}" data-key="spelling">${spellingOpts}</select>
         <select data-idx="${idx}" data-key="quality">${QUALITIES.map(q => `<option ${q === f.quality ? 'selected' : ''}>${q}</option>`).join('')}</select>
         <select data-idx="${idx}" data-key="inversion">${INVERSIONS.map(i => `<option value="${i}" ${i === f.inversion ? 'selected' : ''}>${formatInversion(i)}</option>`).join('')}</select>
         <button class="delete" data-idx="${idx}">×</button>
@@ -945,14 +1159,15 @@ function renderFocusList() {
     sel.onchange = (e) => {
       const idx = +e.target.dataset.idx;
       const key = e.target.dataset.key;
-      const val = key === 'pitchIdx' ? +e.target.value : e.target.value;
-      state.focusItems[idx][key] = val;
+      state.focusItems[idx][key] = e.target.value;
+      updateCollapseMeta();
     };
   });
   list.querySelectorAll('.delete').forEach(btn => {
     btn.onclick = (e) => {
       state.focusItems.splice(+e.target.dataset.idx, 1);
       renderFocusList();
+      updateCollapseMeta();
     };
   });
   list.querySelectorAll('.stress-pill').forEach(pill => {
@@ -966,12 +1181,15 @@ function renderFocusList() {
 function renderHistory() {
   const list = $('history-list');
   const history = JSON.parse(localStorage.getItem('triad-history') || '[]');
+  $('history-clear-btn').style.display = history.length > 0 ? 'inline-block' : 'none';
   if (history.length === 0) {
     list.innerHTML = '<div class="empty">No sessions yet</div>';
     return;
   }
   list.innerHTML = '';
-  history.slice().reverse().forEach((h) => {
+  // We need stable indices into the original array; map reverse-displayed index -> real index
+  history.slice().reverse().forEach((h, displayIdx) => {
+    const realIdx = history.length - 1 - displayIdx;
     const div = document.createElement('div');
     div.className = 'history-item';
     const date = new Date(h.startedAt);
@@ -1001,8 +1219,31 @@ function renderHistory() {
             </div>`).join('')
           : '<div class="empty" style="padding:8px;">No notes</div>'}
       </div>
+      <button class="history-delete" data-idx="${realIdx}">Delete this session</button>
     `;
-    div.onclick = () => div.classList.toggle('expanded');
+    div.onclick = (e) => {
+      if (e.target.classList.contains('history-delete')) return;
+      div.classList.toggle('expanded');
+    };
+    div.querySelector('.history-delete').onclick = (e) => {
+      e.stopPropagation();
+      const idx = +e.target.dataset.idx;
+      const hist = JSON.parse(localStorage.getItem('triad-history') || '[]');
+      const item = hist[idx];
+      showModal({
+        title: 'Delete this session?',
+        body: `${item.mode === 'count' ? item.actualReps + ' reps' : formatDuration(item.actualDuration)} on ${new Date(item.startedAt).toLocaleDateString()}. This cannot be undone.`,
+        actions: [
+          { label: 'Delete', kind: 'danger', onClick: () => {
+            hist.splice(idx, 1);
+            localStorage.setItem('triad-history', JSON.stringify(hist));
+            renderHistory();
+            updateCollapseMeta();
+          }},
+          { label: 'Cancel', kind: 'secondary' }
+        ]
+      });
+    };
     list.appendChild(div);
   });
 }
@@ -1019,15 +1260,79 @@ function formatDuration(seconds) {
 
 function renderAll() {
   renderRootChips();
-  renderSpellingControl();
   renderQualityChips();
   renderInversionChips();
   renderFocusList();
   renderHistory();
+  updateCollapseMeta();
+}
+
+function updateCollapseMeta() {
+  // Advance meta
+  const advanceVal = $('advance-select').value;
+  const labels = {
+    manual: 'Tap card',
+    seconds: `${state.steppers.seconds}s`,
+    beats: `${state.steppers.beats} beats`,
+    bars: `${state.steppers.bars} bars`
+  };
+  $('advance-meta').textContent = labels[advanceVal] || 'Tap card';
+
+  // Metronome meta
+  $('metro-meta').textContent = state.metronome.enabled
+    ? `${state.metronome.bpm} ${state.metronome.meter}/4`
+    : 'Off';
+
+  // Focus meta
+  $('focus-meta').textContent = state.focusItems.length;
+
+  // History meta
+  const historyCount = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length;
+  $('history-meta').textContent = historyCount;
 }
 
 // ============================================================
-// Modal dialog
+// Collapsibles
+// ============================================================
+document.querySelectorAll('.collapse-header').forEach(h => {
+  h.addEventListener('click', (e) => {
+    if (e.target.closest('.stepper, select, .switch, button.delete, .collapse-action')) return;
+    $(h.dataset.target).classList.toggle('open');
+  });
+});
+
+// History: Clear all
+$('history-clear-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  showModal({
+    title: 'Clear all history?',
+    body: 'All session records and notes will be permanently deleted. This cannot be undone.',
+    actions: [
+      { label: 'Clear all', kind: 'danger', onClick: () => {
+        localStorage.removeItem('triad-history');
+        renderHistory();
+        updateCollapseMeta();
+      }},
+      { label: 'Cancel', kind: 'secondary' }
+    ]
+  });
+});
+
+// ============================================================
+// Theme
+// ============================================================
+function applyTheme(theme) {
+  state.theme = theme;
+  document.body.classList.toggle('theme-light', theme === 'light');
+  document.body.classList.toggle('theme-dark', theme === 'dark');
+  $('theme-toggle').textContent = theme === 'dark' ? '☼' : '☾';
+}
+$('theme-toggle').addEventListener('click', () => {
+  applyTheme(state.theme === 'dark' ? 'light' : 'dark');
+});
+
+// ============================================================
+// Modal
 // ============================================================
 function showModal({ title, body, actions }) {
   $('modal-title').textContent = title;
@@ -1049,43 +1354,31 @@ function showModal({ title, body, actions }) {
 }
 
 // ============================================================
-// Presets, segment control, advance modes, metronome toggle
+// Presets, mode/advance toggles
 // ============================================================
 $('root-presets').addEventListener('click', (e) => {
   const p = e.target.dataset.preset;
   if (!p) return;
   if (p === 'all') {
-    state.selectedPitches = new Set(ALL_IDX);
+    state.selectedSpellings = new Set(SPELLING_IDS);
   } else if (p === 'naturals') {
-    state.selectedPitches = new Set(NATURAL_IDX);
+    state.selectedSpellings = new Set(NATURAL_IDS);
   } else if (p === 'sharps') {
-    state.selectedPitches = new Set(SHARP_IDX);
-    state.spelling = 'sharps';
+    state.selectedSpellings = new Set(SHARP_IDS);
   } else if (p === 'flats') {
-    state.selectedPitches = new Set(FLAT_IDX);
-    state.spelling = 'flats';
+    state.selectedSpellings = new Set(FLAT_IDS);
   } else if (p === 'clear') {
-    state.selectedPitches = new Set();
+    state.selectedSpellings = new Set();
   }
   renderRootChips();
-  renderSpellingControl();
-  renderFocusList(); // pitch labels in focus dropdowns depend on spelling
-});
-
-document.querySelectorAll('#spelling-control .segment').forEach(s => {
-  s.addEventListener('click', () => {
-    state.spelling = s.dataset.spelling;
-    renderRootChips();
-    renderSpellingControl();
-    renderFocusList();
-  });
+  renderFocusList();
 });
 
 $('mode-select').addEventListener('change', (e) => {
-  $('count-row').style.display = e.target.value === 'count' ? 'flex' : 'none';
-  $('time-row').style.display = e.target.value === 'time' ? 'flex' : 'none';
+  $('count-stepper').style.display = e.target.value === 'count' ? 'flex' : 'none';
+  $('time-stepper').style.display = e.target.value === 'time' ? 'flex' : 'none';
 });
-$('advance-select').addEventListener('change', updateAdvanceUI);
+$('advance-select').addEventListener('change', () => { updateAdvanceUI(); updateCollapseMeta(); });
 
 function updateAdvanceUI() {
   const val = $('advance-select').value;
@@ -1100,38 +1393,43 @@ $('metro-switch').addEventListener('click', () => {
   $('bpm-row').style.display = state.metronome.enabled ? 'flex' : 'none';
   $('meter-row').style.display = state.metronome.enabled ? 'flex' : 'none';
   $('accent-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+  updateCollapseMeta();
 });
 $('accent-switch').addEventListener('click', () => {
   state.metronome.accent = !state.metronome.accent;
   $('accent-switch').classList.toggle('on', state.metronome.accent);
 });
-$('meter-select').addEventListener('change', (e) => { state.metronome.meter = +e.target.value; });
+$('meter-select').addEventListener('change', (e) => {
+  state.metronome.meter = +e.target.value;
+  updateCollapseMeta();
+});
 
 $('add-focus-btn').addEventListener('click', () => {
-  const pitchIdx = [...state.selectedPitches][0] ?? 0;
+  const spelling = [...state.selectedSpellings][0] || 'C';
   const quality = [...state.selectedQualities][0] || 'major';
   const inversion = [...state.selectedInversions][0] || 'root';
-  state.focusItems.push({ pitchIdx, quality, inversion, stress: 'medium' });
+  state.focusItems.push({ spelling, quality, inversion, stress: 'medium' });
   renderFocusList();
+  updateCollapseMeta();
 });
 
 // ============================================================
-// Queue building
+// Queue building (unchanged)
 // ============================================================
 function buildQueue() {
   const base = [];
-  for (const pitchIdx of state.selectedPitches)
+  for (const spelling of state.selectedSpellings)
     for (const q of state.selectedQualities)
       for (const i of state.selectedInversions)
-        base.push({ pitchIdx, quality: q, inversion: i, focus: null });
+        base.push({ spelling, quality: q, inversion: i, focus: null });
 
   const queue = [...base];
   state.focusItems.forEach(f => {
     const weight = STRESS_WEIGHTS[f.stress];
-    const inBase = base.find(b => b.pitchIdx === f.pitchIdx && b.quality === f.quality && b.inversion === f.inversion);
+    const inBase = base.find(b => b.spelling === f.spelling && b.quality === f.quality && b.inversion === f.inversion);
     const copies = inBase ? weight - 1 : weight;
     for (let i = 0; i < copies; i++) {
-      queue.push({ pitchIdx: f.pitchIdx, quality: f.quality, inversion: f.inversion, focus: f.stress });
+      queue.push({ spelling: f.spelling, quality: f.quality, inversion: f.inversion, focus: f.stress });
     }
   });
   return shuffle(queue);
@@ -1151,7 +1449,7 @@ function nextCard() {
   if (s.queue.length === 0) {
     s.queue = buildQueue();
     if (s.lastCard && s.queue[0] &&
-        s.queue[0].pitchIdx === s.lastCard.pitchIdx &&
+        s.queue[0].spelling === s.lastCard.spelling &&
         s.queue[0].quality === s.lastCard.quality &&
         s.queue[0].inversion === s.lastCard.inversion &&
         s.queue.length > 1) {
@@ -1170,8 +1468,7 @@ function nextCard() {
 }
 
 function renderCard(card) {
-  const name = spellPitch(card.pitchIdx, state.spelling);
-  $('card-root').innerHTML = formatPitchDisplay(name);
+  $('card-root').innerHTML = formatSpellingDisplay(card.spelling);
   $('card-quality').textContent = card.quality;
   $('card-inversion').textContent = card.inversion === 'root' ? 'root position' :
                                      card.inversion === '1st' ? 'first inversion' : 'second inversion';
@@ -1185,7 +1482,6 @@ function renderCard(card) {
   $('stat-progress').textContent = state.session.mode === 'count'
     ? `${state.session.cardCount} / ${state.session.target}`
     : `${state.session.cardCount}`;
-
   const fc = $('flash-card');
   fc.classList.remove('transition');
   void fc.offsetWidth;
@@ -1193,22 +1489,15 @@ function renderCard(card) {
 }
 
 // ============================================================
-// Metronome (Web Audio scheduled buffers)
+// Metronome
 // ============================================================
 let audioCtx = null;
-let metroState = {
-  nextBeatTime: 0,
-  currentBeat: 0,
-  schedulerId: null,
-  uiQueue: []
-};
+let metroState = { nextBeatTime: 0, currentBeat: 0, schedulerId: null, uiQueue: [] };
 const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD = 0.1;
 
 function ensureAudioContext() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
@@ -1227,7 +1516,7 @@ function scheduleClick(time, isDownbeat) {
   gain.gain.exponentialRampToValueAtTime(0.001, time + attack + decay);
   osc.start(time);
   osc.stop(time + attack + decay + 0.01);
-  metroState.uiQueue.push({ time, isDownbeat, beatNum: metroState.currentBeat });
+  metroState.uiQueue.push({ time, isDownbeat });
 }
 
 function metroScheduler() {
@@ -1278,7 +1567,6 @@ function updatePulseUI() {
   requestAnimationFrame(updatePulseUI);
 }
 
-// Called for each audible beat — used by beats/bars advance modes
 function onBeatPlayed(beat) {
   const s = state.session;
   if (!s || s.pauseStartedAt) return;
@@ -1290,7 +1578,6 @@ function onBeatPlayed(beat) {
   }
 }
 
-// In-session metronome controls
 $('metro-display-tap').addEventListener('click', (e) => {
   e.stopPropagation();
   $('metro-panel').classList.toggle('open');
@@ -1305,13 +1592,13 @@ document.addEventListener('click', (e) => {
 // Session start / end
 // ============================================================
 $('start-btn').addEventListener('click', () => {
-  if (state.selectedPitches.size === 0) {
+  if (state.selectedSpellings.size === 0) {
     showModal({
       title: 'Pick at least one root',
-      body: 'You need to select at least one root note to start. Try one of the presets if you want a quick setup.',
+      body: 'You need to select at least one root note to start.',
       actions: [
-        { label: 'Use all 12', kind: 'primary', onClick: () => {
-          state.selectedPitches = new Set(ALL_IDX);
+        { label: 'Use all', kind: 'primary', onClick: () => {
+          state.selectedSpellings = new Set(SPELLING_IDS);
           renderRootChips();
         }},
         { label: 'OK', kind: 'secondary' }
@@ -1332,11 +1619,10 @@ $('start-btn').addEventListener('click', () => {
   const advance = $('advance-select').value;
   const target = mode === 'count' ? state.steppers.count : state.steppers.time * 60;
 
-  // Beat/bar advance requires metronome
   if ((advance === 'beats' || advance === 'bars') && !state.metronome.enabled) {
     showModal({
       title: 'Metronome required',
-      body: 'Advancing by beats or bars needs the metronome turned on. Enable it, or pick a different advance mode.',
+      body: 'Advancing by beats or bars needs the metronome turned on.',
       actions: [
         { label: 'Enable metronome', kind: 'primary', onClick: () => {
           state.metronome.enabled = true;
@@ -1344,6 +1630,7 @@ $('start-btn').addEventListener('click', () => {
           $('bpm-row').style.display = 'flex';
           $('meter-row').style.display = 'flex';
           $('accent-row').style.display = 'flex';
+          updateCollapseMeta();
         }},
         { label: 'Cancel', kind: 'secondary' }
       ]
@@ -1352,9 +1639,7 @@ $('start-btn').addEventListener('click', () => {
   }
 
   state.session = {
-    mode,
-    advance,
-    target,
+    mode, advance, target,
     secondsPerCard: state.steppers.seconds,
     beatsPerCard: state.steppers.beats,
     barsPerCard: state.steppers.bars,
@@ -1369,6 +1654,7 @@ $('start-btn').addEventListener('click', () => {
   };
 
   $('flashcard-view').classList.add('active');
+  document.body.classList.add('session-active');
   document.body.style.overflow = 'hidden';
   nextCard();
   startTimer();
@@ -1439,10 +1725,7 @@ $('save-note-btn').addEventListener('click', () => {
 
 function renderNotesList() {
   const list = $('notes-list');
-  if (!state.session.notes.length) {
-    list.innerHTML = '';
-    return;
-  }
+  if (!state.session.notes.length) { list.innerHTML = ''; return; }
   list.innerHTML = '<div class="notes-list-header">Notes this session</div>' +
     state.session.notes.map(n => `
       <div class="note-item">
@@ -1474,7 +1757,7 @@ function endSession() {
   const actualDuration = Math.floor((Date.now() - s.startedAt - totalPaused) / 1000);
 
   const config = [
-    `${state.selectedPitches.size} roots`,
+    `${state.selectedSpellings.size} roots`,
     `${[...state.selectedQualities].join('/')}`,
     `${[...state.selectedInversions].map(formatInversion).join('/')}`,
     state.metronome.enabled ? `${state.metronome.bpm}bpm ${state.metronome.meter}/4` : '',
@@ -1499,8 +1782,10 @@ function endSession() {
   state.session = null;
   $('flashcard-view').classList.remove('active');
   $('pause-overlay').classList.remove('active');
+  document.body.classList.remove('session-active');
   document.body.style.overflow = '';
   renderHistory();
+  updateCollapseMeta();
 }
 
 // ============================================================
@@ -1508,13 +1793,13 @@ function endSession() {
 // ============================================================
 function saveSettings() {
   const settings = {
-    pitches: [...state.selectedPitches],
-    spelling: state.spelling,
+    spellings: [...state.selectedSpellings],
     qualities: [...state.selectedQualities],
     inversions: [...state.selectedInversions],
     focusItems: state.focusItems,
     metronome: state.metronome,
     steppers: state.steppers,
+    theme: state.theme,
     mode: $('mode-select').value,
     advance: $('advance-select').value,
     meter: $('meter-select').value
@@ -1525,16 +1810,21 @@ function saveSettings() {
 function loadSettings() {
   const saved = JSON.parse(localStorage.getItem('triad-settings') || 'null');
   if (saved) {
-    state.selectedPitches = new Set(saved.pitches || ALL_IDX);
-    state.spelling = saved.spelling || 'mixed';
+    // Migration: old saves used pitch indices. Default to all if not present.
+    state.selectedSpellings = new Set(saved.spellings || SPELLING_IDS);
     state.selectedQualities = new Set(saved.qualities || ['major', 'minor']);
     state.selectedInversions = new Set(saved.inversions || ['root']);
-    state.focusItems = saved.focusItems || [];
+    // Migration: old focus items had pitchIdx; drop them
+    state.focusItems = (saved.focusItems || []).filter(f => f.spelling);
     state.metronome = saved.metronome || { enabled: false, bpm: 80, meter: 4, accent: true };
     state.steppers = { ...state.steppers, ...(saved.steppers || {}) };
+    state.theme = saved.theme || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
     $('mode-select').value = saved.mode || 'count';
     $('advance-select').value = saved.advance || 'manual';
     $('meter-select').value = saved.meter || '4';
+  } else {
+    // No saved state — detect system preference
+    state.theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
   }
 }
 
@@ -1545,25 +1835,27 @@ setInterval(saveSettings, 5000);
 // Initialize
 // ============================================================
 loadSettings();
+applyTheme(state.theme);
 
 // Build steppers
 const stepperRefs = {};
-stepperRefs.count = buildStepper('count-stepper', state.steppers.count, (v) => state.steppers.count = v);
-stepperRefs.time = buildStepper('time-stepper', state.steppers.time, (v) => state.steppers.time = v);
-stepperRefs.seconds = buildStepper('seconds-stepper', state.steppers.seconds, (v) => state.steppers.seconds = v);
-stepperRefs.beats = buildStepper('beats-stepper', state.steppers.beats, (v) => state.steppers.beats = v);
-stepperRefs.bars = buildStepper('bars-stepper', state.steppers.bars, (v) => state.steppers.bars = v);
+stepperRefs.count = buildStepper('count-stepper', state.steppers.count, (v) => { state.steppers.count = v; });
+stepperRefs.time = buildStepper('time-stepper', state.steppers.time, (v) => { state.steppers.time = v; });
+stepperRefs.seconds = buildStepper('seconds-stepper', state.steppers.seconds, (v) => { state.steppers.seconds = v; updateCollapseMeta(); });
+stepperRefs.beats = buildStepper('beats-stepper', state.steppers.beats, (v) => { state.steppers.beats = v; updateCollapseMeta(); });
+stepperRefs.bars = buildStepper('bars-stepper', state.steppers.bars, (v) => { state.steppers.bars = v; updateCollapseMeta(); });
 stepperRefs.bpm = buildStepper('bpm-stepper', state.metronome.bpm, (v) => {
   state.metronome.bpm = v;
   if (state.session && metroState.schedulerId) updateMetroDisplay();
+  updateCollapseMeta();
 });
 stepperRefs.liveBpm = buildStepper('live-bpm-stepper', state.metronome.bpm, (v) => {
   state.metronome.bpm = v;
   stepperRefs.bpm.setValue(v);
   updateMetroDisplay();
+  updateCollapseMeta();
 });
 
-// Live accent switch on flashcard screen
 $('live-accent-switch').classList.toggle('on', state.metronome.accent);
 $('live-accent-switch').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1573,14 +1865,21 @@ $('live-accent-switch').addEventListener('click', (e) => {
 });
 
 // Apply loaded display state
-$('count-row').style.display = $('mode-select').value === 'count' ? 'flex' : 'none';
-$('time-row').style.display = $('mode-select').value === 'time' ? 'flex' : 'none';
+$('count-stepper').style.display = $('mode-select').value === 'count' ? 'flex' : 'none';
+$('time-stepper').style.display = $('mode-select').value === 'time' ? 'flex' : 'none';
 updateAdvanceUI();
 $('metro-switch').classList.toggle('on', state.metronome.enabled);
 $('accent-switch').classList.toggle('on', state.metronome.accent);
 $('bpm-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('meter-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('accent-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+
+// First-use heuristic: if history is empty, open Metronome + Focus by default
+const historyExists = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length > 0;
+if (!historyExists) {
+  $('metronome-section').classList.add('open');
+  $('focus-section').classList.add('open');
+}
 
 renderAll();
 </script>
