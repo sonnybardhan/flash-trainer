@@ -1496,9 +1496,11 @@ let metroState = { nextBeatTime: 0, currentBeat: 0, schedulerId: null, uiQueue: 
 const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD = 0.1;
 
-function ensureAudioContext() {
+async function ensureAudioContext() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+    try { await audioCtx.resume(); } catch (e) { /* iOS may reject outside user gesture */ }
+  }
 }
 
 function scheduleClick(time, isDownbeat) {
@@ -1530,8 +1532,8 @@ function metroScheduler() {
   }
 }
 
-function startMetronome() {
-  ensureAudioContext();
+async function startMetronome() {
+  await ensureAudioContext();
   metroState.currentBeat = 0;
   metroState.nextBeatTime = audioCtx.currentTime + 0.1;
   metroState.uiQueue = [];
@@ -1708,6 +1710,19 @@ $('resume-btn').addEventListener('click', () => {
   $('pause-overlay').classList.remove('active');
   $('note-input').value = '';
   if (state.metronome.enabled) startMetronome();
+});
+
+// iOS recovery: if the page returns from background/lock while the metronome is running,
+// the AudioContext is likely suspended. Re-resume and rebase the schedule so we don't try
+// to schedule clicks at past timestamps. If resume fails (no user gesture), the next tap fixes it.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!metroState.schedulerId || !audioCtx) return;
+  await ensureAudioContext();
+  if (audioCtx.state === 'running') {
+    metroState.nextBeatTime = audioCtx.currentTime + 0.1;
+    metroState.currentBeat = 0;
+  }
 });
 
 $('save-note-btn').addEventListener('click', () => {
