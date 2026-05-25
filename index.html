@@ -249,6 +249,11 @@
     padding: 6px 11px;
   }
   .chip.preset:active { background: var(--surface-2); }
+  .chip.preset[data-preset="clear"] {
+    margin-left: auto;
+    color: var(--text-dim);
+    border-color: var(--border);
+  }
 
   /* Segment control (generic) */
   .segment-control {
@@ -710,7 +715,6 @@
     <div class="panel">
       <div class="preset-row" id="root-presets">
         <button class="chip preset" data-preset="all">all</button>
-        <button class="chip preset" data-preset="naturals">naturals</button>
         <button class="chip preset" data-preset="sharps">sharps</button>
         <button class="chip preset" data-preset="flats">flats</button>
         <button class="chip preset" data-preset="clear">clear</button>
@@ -948,9 +952,10 @@ const SPELLINGS = [
   { id: 'B',  display: 'B'  }
 ];
 const SPELLING_IDS = SPELLINGS.map(s => s.id);
-const NATURAL_IDS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const SHARP_IDS = ['C#', 'F#', 'G#'];
-const FLAT_IDS = ['Db', 'Eb', 'Gb', 'Ab', 'Bb'];
+// Sharp-key roots (key signatures with 1–6 sharps): G, D, A, E, B, F#
+const SHARP_IDS = ['G', 'D', 'A', 'E', 'B', 'F#'];
+// Flat-key roots (key signatures with 1–6 flats): F, Bb, Eb, Ab, Db, Gb
+const FLAT_IDS = ['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb'];
 
 const QUALITIES = ['major', 'minor', 'diminished', 'augmented'];
 const INVERSIONS = ['root', '1st', '2nd'];
@@ -1361,8 +1366,6 @@ $('root-presets').addEventListener('click', (e) => {
   if (!p) return;
   if (p === 'all') {
     state.selectedSpellings = new Set(SPELLING_IDS);
-  } else if (p === 'naturals') {
-    state.selectedSpellings = new Set(NATURAL_IDS);
   } else if (p === 'sharps') {
     state.selectedSpellings = new Set(SHARP_IDS);
   } else if (p === 'flats') {
