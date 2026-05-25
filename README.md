@@ -1,4 +1,4 @@
-# Triad Trainer
+# Rep Trainer
 
 A single-file web app for drilling triads on your instrument. Pick the roots, qualities, and inversions you want to work on, set a session length, and run timed reps with an optional metronome. Pause to jot a note when something clicks (or doesn't); past sessions and notes are saved locally.
 
