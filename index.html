@@ -584,7 +584,10 @@
   .range-open-btn:hover { border-color: var(--border-strong); }
   .range-open-chevron { color: var(--text-faint); font-size: 14px; }
 
-  .modal.range-modal { max-width: 600px; width: calc(100vw - 32px); }
+  .modal.range-modal {
+    max-width: 600px; width: calc(100vw - 32px);
+    max-height: calc(100vh - 48px); overflow-y: auto;
+  }
   .range-modal-hint {
     font-family: var(--mono); font-size: 10px;
     color: var(--text-faint); letter-spacing: 1px;
@@ -593,11 +596,19 @@
   .range-picker-stage {
     background: var(--surface-2);
     border-radius: 8px;
-    padding: 28px 18px;
+    padding: 20px 18px;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     display: flex;
     justify-content: center;
+    align-items: center;
+    max-height: 70vh;
+  }
+  .range-picker-stage .range-guide-ledger {
+    stroke: var(--text-faint);
+    stroke-width: 1;
+    opacity: 0.55;
+    pointer-events: none;
   }
   .range-picker-bounds {
     font-family: var(--mono); font-size: 13px; color: var(--text);
@@ -2375,23 +2386,62 @@ function updateRangeCurrentLabel() {
 let pickerFirstTap = null;
 let pickerError = null;
 
+// Diatonic position = octave*7 + letter index (C=0..B=6). Used to lay out
+// pitches in a single linear vertical coordinate space across both clefs.
+function pitchDiatonic(pitch) {
+  const p = parsePitchName(pitch);
+  return p.octave * 7 + DIATONIC_INDEX[p.letter];
+}
+
+function enumeratePitches(lo, hi) {
+  const loDia = pitchDiatonic(lo);
+  const hiDia = pitchDiatonic(hi);
+  const letters = ['C','D','E','F','G','A','B'];
+  const out = [];
+  for (let d = loDia; d <= hiDia; d++) {
+    const oct = Math.floor(d / 7);
+    const letter = letters[d - oct * 7];
+    out.push({ pitch: `${letter}${oct}`, diatonic: d });
+  }
+  return out;
+}
+
 function renderRangePicker() {
   const stage = $('range-picker-stage');
   stage.replaceChildren();
   const ns = state.notation;
   const { trebleRange, bassRange } = pickerVisibleFor(ns.clef);
   const VF = Vex.Flow;
-
-  const spacing = 12; // staff line spacing in px (default 10; this is just a touch bigger)
-  const width = 420;
   const isGrand = trebleRange && bassRange;
-  // Each stave takes 4 * spacing for the lines, plus padding for ledgers above/below.
-  const ledgerPad = spacing * 4; // room for ~4 ledger positions on each side
-  const staveH = spacing * 4 + 2;
-  const staveGap = spacing * 5;  // vertical gap between staves on grand staff
-  const height = isGrand
-    ? ledgerPad + staveH + staveGap + staveH + ledgerPad
-    : ledgerPad + staveH + ledgerPad;
+
+  // Overall visible diatonic span — single linear coordinate for the SVG.
+  const visibleLow = bassRange ? bassRange[0] : trebleRange[0];
+  const visibleHigh = trebleRange ? trebleRange[1] : bassRange[1];
+  const loDia = pitchDiatonic(visibleLow);
+  const hiDia = pitchDiatonic(visibleHigh);
+
+  const spacing = 12;      // distance between adjacent staff lines (px)
+  const halfLine = spacing / 2;
+  const width = 420;
+
+  // Pad above/below so the staff (or middle C for grand) lands at the
+  // vertical center of the SVG.
+  const centerDia = isGrand
+    ? pitchDiatonic('C4')
+    : trebleRange ? (pitchDiatonic('E4') + pitchDiatonic('F5')) / 2
+                  : (pitchDiatonic('G2') + pitchDiatonic('A3')) / 2;
+  const aboveCenter = hiDia - centerDia;
+  const belowCenter = centerDia - loDia;
+  const basePad = 18;
+  let padTop = basePad, padBot = basePad;
+  if (aboveCenter > belowCenter)      padBot += (aboveCenter - belowCenter) * halfLine;
+  else if (belowCenter > aboveCenter) padTop += (belowCenter - aboveCenter) * halfLine;
+  const height = padTop + (hiDia - loDia) * halfLine + padBot;
+
+  // Anchor: highest visible pitch sits at y = padTop. Each diatonic step
+  // below is +halfLine in y.
+  const yForDia = (d) => padTop + (hiDia - d) * halfLine;
+  const yForPitch = (pitch) => yForDia(pitchDiatonic(pitch));
 
   const renderer = new VF.Renderer(stage, VF.Renderer.Backends.SVG);
   renderer.resize(width, height);
@@ -2403,14 +2453,16 @@ function renderRangePicker() {
 
   const staveOpts = { spacing_between_lines_px: spacing };
   let trebleStave = null, bassStave = null;
+
   if (trebleRange) {
-    const y = ledgerPad;
-    trebleStave = new VF.Stave(16, y, width - 32, staveOpts);
+    // VexFlow line 0 = top staff line (F5). getYForLine(0) = stave.y + headroom*spacing = stave.y + 48.
+    const f5Y = yForPitch('F5');
+    trebleStave = new VF.Stave(16, f5Y - 4 * spacing, width - 32, staveOpts);
     trebleStave.addClef('treble').setContext(ctx).draw();
   }
   if (bassRange) {
-    const y = isGrand ? ledgerPad + staveH + staveGap : ledgerPad;
-    bassStave = new VF.Stave(16, y, width - 32, staveOpts);
+    const a3Y = yForPitch('A3');
+    bassStave = new VF.Stave(16, a3Y - 4 * spacing, width - 32, staveOpts);
     bassStave.addClef('bass').setContext(ctx).draw();
   }
   if (isGrand) {
@@ -2420,30 +2472,43 @@ function renderRangePicker() {
 
   const svg = stage.querySelector('svg');
 
-  // Compute Y + owning stave for any pitch.
-  function pitchInfo(pitch) {
-    const semi = pitchSemitones(parsePitchName(pitch));
-    if (isGrand) {
-      const useTreble = semi >= pitchSemitones(parsePitchName('C4'));
-      const stave = useTreble ? trebleStave : bassStave;
-      const clef = useTreble ? 'treble' : 'bass';
-      return { y: stave.getYForLine(pitchToLineFromTop(pitch, clef)), stave };
-    }
-    if (trebleStave) return { y: trebleStave.getYForLine(pitchToLineFromTop(pitch, 'treble')), stave: trebleStave };
-    return { y: bassStave.getYForLine(pitchToLineFromTop(pitch, 'bass')), stave: bassStave };
-  }
-
-  // Highlight band between current bounds — narrow ribbon centered on
-  // the chord stack rather than spanning the full bar width.
-  const xStart = 80;            // just past the clef glyph
+  const xStart = 80;
   const xEnd = width - 24;
   const chordX = (xStart + xEnd) / 2;
+
+  // Guide ledger lines: at every "line" diatonic position OUTSIDE any drawn staff.
+  // A "line" position is one where diatonic - diatonic(E4) is even — true for
+  // both treble (E4) and bass (G2) since both bottom lines have even diatonic.
+  const e4Dia = pitchDiatonic('E4');
+  const ledgerHalfW = 14;
+  function inAnyStave(d) {
+    if (trebleRange) {
+      const lo = pitchDiatonic('E4'), hi = pitchDiatonic('F5');
+      if (d >= lo && d <= hi) return true;
+    }
+    if (bassRange) {
+      const lo = pitchDiatonic('G2'), hi = pitchDiatonic('A3');
+      if (d >= lo && d <= hi) return true;
+    }
+    return false;
+  }
+  for (let d = loDia; d <= hiDia; d++) {
+    if (((d - e4Dia) % 2 + 2) % 2 !== 0) continue; // only line positions
+    if (inAnyStave(d)) continue;                    // skip already-drawn staff lines
+    const y = yForDia(d);
+    svg.appendChild(svgEl('line', {
+      x1: chordX - ledgerHalfW, x2: chordX + ledgerHalfW,
+      y1: y, y2: y, class: 'range-guide-ledger'
+    }));
+  }
+
+  // Highlight band — narrow rounded ribbon around the chord stack.
   const bandHalfW = 28;
   if (!pickerError) {
-    const loInfo = pitchInfo(ns.rangeLow);
-    const hiInfo = pitchInfo(ns.rangeHigh);
-    const minY = Math.min(loInfo.y, hiInfo.y) - spacing * 0.6;
-    const maxY = Math.max(loInfo.y, hiInfo.y) + spacing * 0.6;
+    const loY = yForPitch(ns.rangeLow);
+    const hiY = yForPitch(ns.rangeHigh);
+    const minY = Math.min(loY, hiY) - spacing * 0.6;
+    const maxY = Math.max(loY, hiY) + spacing * 0.6;
     svg.appendChild(svgEl('rect', {
       x: chordX - bandHalfW, y: minY,
       width: bandHalfW * 2, height: maxY - minY,
@@ -2451,38 +2516,42 @@ function renderRangePicker() {
     }));
   }
 
-  // Bound noteheads — stacked at the same x like a block chord.
-  const lowInfo = pitchInfo(ns.rangeLow);
-  const highInfo = pitchInfo(ns.rangeHigh);
-  drawNotehead(svg, chordX, lowInfo.y, lowInfo.stave, color, 'range-bound-note');
-  drawNotehead(svg, chordX, highInfo.y, highInfo.stave, color, 'range-bound-note');
+  // Helper: which stave to anchor a notehead's ledger lines to (closest one).
+  function staveFor(pitch) {
+    if (!isGrand) return trebleStave || bassStave;
+    const dia = pitchDiatonic(pitch);
+    const c4 = pitchDiatonic('C4');
+    return dia >= c4 ? trebleStave : bassStave;
+  }
 
-  // Pending tap notehead (slight horizontal offset so it doesn't overlap a bound).
+  // Bound noteheads stacked at chordX (block-chord style).
+  drawNotehead(svg, chordX, yForPitch(ns.rangeLow), staveFor(ns.rangeLow), color, 'range-bound-note');
+  drawNotehead(svg, chordX, yForPitch(ns.rangeHigh), staveFor(ns.rangeHigh), color, 'range-bound-note');
+
+  // Pending tap notehead (slightly offset).
   if (pickerFirstTap) {
-    const info = pitchInfo(pickerFirstTap);
-    drawNotehead(svg, chordX + spacing * 1.1, info.y, info.stave, accent, 'range-pending-note', 0.85);
+    drawNotehead(svg, chordX + spacing * 1.2, yForPitch(pickerFirstTap),
+                 staveFor(pickerFirstTap), accent, 'range-pending-note', 0.85);
   }
 
-  // Hit zones + hover handlers.
-  function addHits(pitches, stave, clef) {
-    if (!pitches) return;
-    const hitH = spacing * 0.95;
-    for (const pitch of pitches) {
-      const y = stave.getYForLine(pitchToLineFromTop(pitch, clef));
-      const rect = svgEl('rect', {
-        x: xStart - 20, y: y - hitH / 2,
-        width: xEnd - xStart + 40, height: hitH,
-        class: 'range-hit',
-        fill: 'none', stroke: 'none', 'pointer-events': 'all'
-      });
-      rect.addEventListener('click', () => handleRangeTap(pitch));
-      rect.addEventListener('mouseenter', () => { $('range-picker-hover').textContent = pitch; });
-      rect.addEventListener('mouseleave', () => { $('range-picker-hover').textContent = ''; });
-      svg.appendChild(rect);
-    }
+  // Hit zones for every visible pitch (lines + spaces).
+  const hitH = halfLine;
+  for (let d = loDia; d <= hiDia; d++) {
+    const oct = Math.floor(d / 7);
+    const letter = ['C','D','E','F','G','A','B'][d - oct * 7];
+    const pitch = `${letter}${oct}`;
+    const y = yForDia(d);
+    const rect = svgEl('rect', {
+      x: xStart - 20, y: y - hitH / 2,
+      width: xEnd - xStart + 40, height: hitH,
+      class: 'range-hit',
+      fill: 'none', stroke: 'none', 'pointer-events': 'all'
+    });
+    rect.addEventListener('click', () => handleRangeTap(pitch));
+    rect.addEventListener('mouseenter', () => { $('range-picker-hover').textContent = pitch; });
+    rect.addEventListener('mouseleave', () => { $('range-picker-hover').textContent = ''; });
+    svg.appendChild(rect);
   }
-  if (trebleRange) addHits(naturalsInRange(trebleRange[0], trebleRange[1]), trebleStave, 'treble');
-  if (bassRange)   addHits(naturalsInRange(bassRange[0], bassRange[1]),     bassStave,   'bass');
 
   // Status line.
   const bounds = $('range-picker-bounds');
