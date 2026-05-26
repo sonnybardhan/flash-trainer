@@ -798,6 +798,14 @@
           <div class="segment" data-hand="both">Both</div>
         </div>
       </div>
+      <div class="form-row" id="voicing-row" style="display:none;">
+        <label>Voicing</label>
+        <div class="segment-control" id="voicing-segment">
+          <div class="segment active" data-voicing="closed">Closed</div>
+          <div class="segment" data-voicing="open">Open</div>
+          <div class="segment" data-voicing="mixed">Mixed</div>
+        </div>
+      </div>
       <div class="form-row" id="double-root-row" style="display:none;">
         <label>Double root in bass</label>
         <div class="switch" id="double-root-switch"></div>
@@ -1181,6 +1189,55 @@ function placeChordInRange(spelling, quality, inversion, rangeLow, rangeHigh) {
   return null;
 }
 
+// Open voicing ("Spread 3" with the convention agreed for inversions):
+//   Root: bass = root + 5th (P5), treble = 3rd
+//   1st:  bass = 3rd alone,       treble = 5th + root (closed)
+//   2nd:  bass = 5th alone,       treble = root + 3rd (closed)
+// Returns { bassTones, trebleTones } as ordered chord-tone arrays (no octaves yet).
+function openVoicingLayout(spelling, quality, inversion) {
+  const [root, third, fifth] = chordTones(spelling, quality);
+  if (inversion === 'root') return { bassTones: [root, fifth], trebleTones: [third] };
+  if (inversion === '1st')  return { bassTones: [third],       trebleTones: [fifth, root] };
+  return                          { bassTones: [fifth],       trebleTones: [root, third] };
+}
+
+// Place an ordered set of tones in the lowest octave that puts all of them within [lo, hi].
+// Tones stack within an octave (closed) — used per-staff for open voicings.
+function placeTonesInRange(tones, rangeLow, rangeHigh) {
+  const lowSemi = pitchSemitones(parsePitchName(rangeLow));
+  const highSemi = pitchSemitones(parsePitchName(rangeHigh));
+  for (let oct = 1; oct <= 7; oct++) {
+    const out = [];
+    let prevSemi = -Infinity;
+    let octave = oct;
+    for (const t of tones) {
+      let candidate = pitchSemitones({ ...t, octave });
+      while (candidate <= prevSemi) {
+        octave++;
+        candidate = pitchSemitones({ ...t, octave });
+      }
+      out.push({ ...t, octave });
+      prevSemi = candidate;
+    }
+    const loS = pitchSemitones(out[0]);
+    const hiS = pitchSemitones(out[out.length - 1]);
+    if (loS >= lowSemi && hiS <= highSemi) return out;
+  }
+  return null;
+}
+
+function placeOpenVoicing(card, rangeLow, rangeHigh) {
+  const layout = openVoicingLayout(card.spelling, card.quality, card.inversion);
+  // Bass: from rangeLow up to C4. Treble: from C4 to rangeHigh.
+  const splitSemi = pitchSemitones(parsePitchName('C4'));
+  const bassHi = pitchSemitones(parsePitchName(rangeHigh)) > splitSemi ? 'C4' : rangeHigh;
+  const trebleLo = pitchSemitones(parsePitchName(rangeLow)) < splitSemi ? 'C4' : rangeLow;
+  const bass = placeTonesInRange(layout.bassTones, rangeLow, bassHi);
+  const treble = placeTonesInRange(layout.trebleTones, trebleLo, rangeHigh);
+  if (!bass || !treble) return null;
+  return { bass, treble };
+}
+
 function accidentalString(acc) {
   if (acc === 0) return null;
   if (acc > 0) return '#'.repeat(acc);
@@ -1271,6 +1328,17 @@ function resolveChordClef(card, hand, voicing) {
   return card.chordClef;
 }
 
+// Stable per-card voicing resolution. In Both+Mixed, picks closed or open once.
+// Anything other than Both is forced to Closed (Open requires both staves, §3.2).
+function resolveVoicing(card, hand, voicing) {
+  if (hand !== 'both') return 'closed';
+  if (voicing !== 'mixed') return voicing;
+  if (!('voicingResolved' in card)) {
+    card.voicingResolved = Math.random() < 0.5 ? 'closed' : 'open';
+  }
+  return card.voicingResolved;
+}
+
 function resolveArticulation(setting) {
   if (setting === 'mixed') return Math.random() < 0.5 ? 'block' : 'arpeggio';
   return setting;
@@ -1297,6 +1365,10 @@ function makeWholeRest(VF, clef) {
   const key = clef === 'bass' ? 'd/3' : 'b/4';
   return new VF.StaveNote({ clef, keys: [key], duration: 'wr' });
 }
+function makeEighthRest(VF, clef) {
+  const key = clef === 'bass' ? 'd/3' : 'b/4';
+  return new VF.StaveNote({ clef, keys: [key], duration: '8r' });
+}
 
 function drawChordVoice(VF, ctx, stave, notes, articulation, width) {
   const voice = articulation === 'block'
@@ -1311,60 +1383,17 @@ function drawChordVoice(VF, ctx, stave, notes, articulation, width) {
   }
 }
 
-function renderNotation(card, container) {
-  container.replaceChildren();
-  const ns = state.notation;
-  const VF = Vex.Flow;
-
-  const articulation = resolveArticulation(ns.articulation);
-  const direction = resolveDirection(ns.arpeggioDirection);
-  const keyName = ns.accidentals === 'keySig' ? keySigFor(card.spelling, card.quality) : null;
-  const addAcc = (note, ps) => {
-    ps.forEach((p, i) => {
-      const accStr = accidentalModifierFor(p.accidental, impliedAccidental(keyName, p.letter));
-      if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
-    });
-  };
-
-  const isGrand = ns.hand === 'both';
-  const chordClef = isGrand
-    ? (resolveChordClef(card, ns.hand, ns.voicing) || 'treble')
-    : (ns.hand === 'left' ? 'bass' : 'treble');
-
-  const placeRange = isGrand
-    ? narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef)
-    : { lo: ns.rangeLow, hi: ns.rangeHigh };
-  const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
-  if (!pitches) {
-    const skip = document.createElement('div');
-    skip.className = 'notation-skip';
-    skip.textContent = 'chord out of range';
-    container.appendChild(skip);
-    return;
-  }
-
-  const width = articulation === 'arpeggio' ? 340 : 300;
-  const height = isGrand ? 220 : 140;
+function setupRenderer(VF, container, width, height) {
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
   renderer.resize(width, height);
   const ctx = renderer.getContext();
   const color = themeColor();
   ctx.setFillStyle(color);
   ctx.setStrokeStyle(color);
+  return ctx;
+}
 
-  if (!isGrand) {
-    const stave = new VF.Stave(8, 18, width - 16);
-    stave.addClef(chordClef);
-    if (keyName) stave.addKeySignature(keyName);
-    stave.setContext(ctx).draw();
-    const notes = articulation === 'block'
-      ? [makeBlockNote(VF, chordClef, pitches, addAcc)]
-      : makeArpNotes(VF, chordClef, pitches, direction, addAcc);
-    drawChordVoice(VF, ctx, stave, notes, articulation, width);
-    return;
-  }
-
-  // Grand staff: brace + both staves.
+function buildGrandStaff(VF, ctx, width, keyName) {
   const trebleStave = new VF.Stave(8, 8, width - 16);
   trebleStave.addClef('treble');
   if (keyName) trebleStave.addKeySignature(keyName);
@@ -1377,6 +1406,15 @@ function renderNotation(card, container) {
 
   new VF.StaveConnector(trebleStave, bassStave).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
   new VF.StaveConnector(trebleStave, bassStave).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
+  return { trebleStave, bassStave };
+}
+
+function renderClosedGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns) {
+  const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
+  const chordClef = resolveChordClef(card, ns.hand, 'closed') || 'treble';
+  const placeRange = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
+  const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
+  if (!pitches) { renderSkip(container); return; }
 
   const chordNotes = articulation === 'block'
     ? [makeBlockNote(VF, chordClef, pitches, addAcc)]
@@ -1401,6 +1439,109 @@ function renderNotation(card, container) {
   restVoice.addTickables(otherNotes);
   new VF.Formatter().joinVoices([restVoice]).format([restVoice], width - 80);
   restVoice.draw(ctx, otherStave);
+}
+
+function renderOpenGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns) {
+  const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
+  const placed = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
+  if (!placed) { renderSkip(container); return; }
+
+  if (articulation === 'block') {
+    // Whole-note chord on each staff.
+    const bassNote = makeBlockNote(VF, 'bass', placed.bass, addAcc);
+    const trebleNote = makeBlockNote(VF, 'treble', placed.treble, addAcc);
+    [['bass', bassStave, [bassNote]], ['treble', trebleStave, [trebleNote]]].forEach(([_, stave, notes]) => {
+      const v = new VF.Voice({ num_beats: 4, beat_value: 4 });
+      v.addTickables(notes);
+      new VF.Formatter().joinVoices([v]).format([v], width - 80);
+      v.draw(ctx, stave);
+    });
+    return;
+  }
+
+  // Arpeggio: 3 eighth notes total spread across staves, no beam (cross-staff, §4.4).
+  // Build pitch-ordered sequence with staff tags.
+  const tagged = [
+    ...placed.bass.map(p => ({ pitch: p, staff: 'bass' })),
+    ...placed.treble.map(p => ({ pitch: p, staff: 'treble' }))
+  ];
+  // Already pitch-ordered (bass < treble by construction). Reverse for down.
+  const seq = direction === 'down' ? [...tagged].reverse() : tagged;
+
+  const bassSlots = [];
+  const trebleSlots = [];
+  for (const item of seq) {
+    if (item.staff === 'bass') {
+      const n = new VF.StaveNote({ clef: 'bass', keys: [pitchToVexKey(item.pitch)], duration: '8', auto_stem: true });
+      addAcc(n, [item.pitch]);
+      bassSlots.push(n);
+      trebleSlots.push(makeEighthRest(VF, 'treble'));
+    } else {
+      const n = new VF.StaveNote({ clef: 'treble', keys: [pitchToVexKey(item.pitch)], duration: '8', auto_stem: true });
+      addAcc(n, [item.pitch]);
+      trebleSlots.push(n);
+      bassSlots.push(makeEighthRest(VF, 'bass'));
+    }
+  }
+  [[bassStave, bassSlots], [trebleStave, trebleSlots]].forEach(([stave, notes]) => {
+    const v = new VF.Voice({ num_beats: 3, beat_value: 8 });
+    v.addTickables(notes);
+    new VF.Formatter().joinVoices([v]).format([v], width - 80);
+    v.draw(ctx, stave);
+  });
+}
+
+function renderSkip(container) {
+  container.replaceChildren();
+  const skip = document.createElement('div');
+  skip.className = 'notation-skip';
+  skip.textContent = 'chord out of range';
+  container.appendChild(skip);
+}
+
+function renderNotation(card, container) {
+  container.replaceChildren();
+  const ns = state.notation;
+  const VF = Vex.Flow;
+
+  const articulation = resolveArticulation(ns.articulation);
+  const direction = resolveDirection(ns.arpeggioDirection);
+  const keyName = ns.accidentals === 'keySig' ? keySigFor(card.spelling, card.quality) : null;
+  const addAcc = (note, ps) => {
+    ps.forEach((p, i) => {
+      const accStr = accidentalModifierFor(p.accidental, impliedAccidental(keyName, p.letter));
+      if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
+    });
+  };
+
+  const effectiveVoicing = resolveVoicing(card, ns.hand, ns.voicing);
+  const isGrand = ns.hand === 'both';
+
+  const width = articulation === 'arpeggio' ? 340 : 300;
+  const height = isGrand ? 220 : 140;
+  const ctx = setupRenderer(VF, container, width, height);
+
+  if (!isGrand) {
+    const clef = ns.hand === 'left' ? 'bass' : 'treble';
+    const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
+    if (!pitches) { renderSkip(container); return; }
+    const stave = new VF.Stave(8, 18, width - 16);
+    stave.addClef(clef);
+    if (keyName) stave.addKeySignature(keyName);
+    stave.setContext(ctx).draw();
+    const notes = articulation === 'block'
+      ? [makeBlockNote(VF, clef, pitches, addAcc)]
+      : makeArpNotes(VF, clef, pitches, direction, addAcc);
+    drawChordVoice(VF, ctx, stave, notes, articulation, width);
+    return;
+  }
+
+  // Grand staff path
+  if (effectiveVoicing === 'open') {
+    renderOpenGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns);
+  } else {
+    renderClosedGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns);
+  }
 }
 
 // ============================================================
@@ -1823,14 +1964,17 @@ function setActiveSegment(segmentId, attr, value) {
   });
 }
 function updateNotationRowVisibility() {
-  const isNotation = state.notation.format === 'notation';
+  const ns = state.notation;
+  const isNotation = ns.format === 'notation';
   $('hand-row').style.display = isNotation ? 'flex' : 'none';
+  // Voicing only meaningful in Both (single-staff modes force Closed, §3.2).
+  $('voicing-row').style.display = isNotation && ns.hand === 'both' ? 'flex' : 'none';
   $('articulation-row').style.display = isNotation ? 'flex' : 'none';
-  const showDir = isNotation && state.notation.articulation !== 'block';
+  const showDir = isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
   $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
-  // Double root only meaningful in Both + Closed (Open is Phase 5).
-  const showDoubleRoot = isNotation && state.notation.hand === 'both' && state.notation.voicing === 'closed';
+  // Double root only meaningful in Both + Closed.
+  const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
 }
 function rerenderCurrentCard() {
@@ -1893,6 +2037,20 @@ $('hand-segment').addEventListener('click', (e) => {
 $('double-root-switch').addEventListener('click', () => {
   state.notation.doubleRootInBass = !state.notation.doubleRootInBass;
   $('double-root-switch').classList.toggle('on', state.notation.doubleRootInBass);
+  rerenderCurrentCard();
+});
+$('voicing-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.voicing = seg.dataset.voicing;
+  // Voicing changed: invalidate any cached per-card resolutions so the new
+  // voicing applies and Mixed re-rolls.
+  if (state.session && state.session.lastCard) {
+    delete state.session.lastCard.chordClef;
+    delete state.session.lastCard.voicingResolved;
+  }
+  setActiveSegment('voicing-segment', 'voicing', state.notation.voicing);
+  updateNotationRowVisibility();
   rerenderCurrentCard();
 });
 
