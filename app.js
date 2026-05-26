@@ -683,14 +683,28 @@ function applyNotationSettingsToUI() {
 }
 
 function populatePianoPresetSelect() {
-  const sel = $('piano-preset-select');
-  if (sel.options.length) return; // already filled
-  for (const [id, spec] of Object.entries(PIANO_PRESETS)) {
-    const o = document.createElement('option');
-    o.value = id;
-    o.textContent = spec.label;
-    sel.appendChild(o);
+  for (const selId of ['piano-preset-select', 'eq-piano-select']) {
+    const sel = $(selId);
+    if (sel.options.length) continue;
+    for (const [id, spec] of Object.entries(PIANO_PRESETS)) {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = spec.label;
+      sel.appendChild(o);
+    }
   }
+}
+
+// Set the piano preset from either entry point and keep both selects + EQ
+// row label in sync.
+function setPianoPreset(presetId) {
+  if (!PIANO_PRESETS[presetId]) return;
+  state.notation.pianoPreset = presetId;
+  $('piano-preset-select').value = presetId;
+  $('eq-piano-select').value = presetId;
+  if (state.notation.playSound) prefetchPianoEngine();
+  updateEqCurrentLabel();
+  saveNotationSettings();
 }
 function rerenderCurrentCard() {
   if (state.session && state.session.lastCard) {
@@ -796,11 +810,8 @@ $('play-sound-switch').addEventListener('click', () => {
   updateNotationRowVisibility();
   saveNotationSettings();
 });
-$('piano-preset-select').addEventListener('change', (e) => {
-  state.notation.pianoPreset = e.target.value;
-  if (state.notation.playSound) prefetchPianoEngine();
-  saveNotationSettings();
-});
+$('piano-preset-select').addEventListener('change', (e) => setPianoPreset(e.target.value));
+$('eq-piano-select').addEventListener('change', (e) => setPianoPreset(e.target.value));
 $('preview-block-btn').addEventListener('click', () => previewChord('block'));
 $('preview-arp-btn').addEventListener('click', () => previewChord('arpeggio'));
 
@@ -821,14 +832,22 @@ function _eqMatchesPreset(eq) {
   const v = _eqValues(eq);
   return v.bassDb === preset.bassDb && v.midDb === preset.midDb && v.trebleDb === preset.trebleDb;
 }
+function _shortPianoLabel(id) {
+  const full = (PIANO_PRESETS[id] || PIANO_PRESETS.fluidr3).label;
+  // strip trailing parenthetical like " (default)" or " (mellow)"
+  return full.replace(/\s*\(.*\)\s*$/, '');
+}
 function updateEqCurrentLabel() {
   const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
   const presetLabel = (EQ_PRESETS[eq.preset] || EQ_PRESETS.warm).label;
-  $('eq-current-label').textContent = _eqMatchesPreset(eq) ? presetLabel : `${presetLabel} · custom`;
+  const piano = _shortPianoLabel(state.notation.pianoPreset);
+  const eqStr = _eqMatchesPreset(eq) ? presetLabel : `${presetLabel} · custom`;
+  $('eq-current-label').textContent = `${piano} · ${eqStr}`;
 }
 function applyEqToUI() {
   const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
   setActiveSegment('eq-preset-segment', 'eqPreset', eq.preset);
+  $('eq-piano-select').value = state.notation.pianoPreset || 'fluidr3';
   const v = _eqValues(eq);
   $('eq-bass-slider').value = String(v.bassDb);
   $('eq-bass-value').textContent = _fmtDb(v.bassDb);
