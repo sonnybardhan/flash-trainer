@@ -1548,10 +1548,38 @@ function makeBlockNote(VF, clef, pitches, addAcc) {
 function makeArpNotes(VF, clef, pitches, direction, addAcc) {
   const ordered = direction === 'down' ? [...pitches].reverse() : pitches;
   return ordered.map(p => {
-    const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(p)], duration: '8', auto_stem: true });
+    // No auto_stem: we set a unified stem direction for the whole beam group later.
+    const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(p)], duration: '8' });
     addAcc(n, [p]);
     return n;
   });
+}
+
+// Pick a single stem direction for a beam group so all stems point the same
+// way and the beam clears every notehead. Standard rule: the note furthest
+// from the middle staff line decides — above middle -> stems down, below -> up.
+// Returns the VexFlow stem direction (+1 up, -1 down) and applies it.
+function unifyBeamStemDirection(notes, clef) {
+  const middleSemi = clef === 'bass' ? 38 : 59; // D3 for bass, B4 for treble
+  let furthest = 0;
+  for (const n of notes) {
+    const key = n.keys[0]; // 'c#/4', 'bb/3', etc.
+    const slash = key.indexOf('/');
+    const pitchPart = key.slice(0, slash);
+    const oct = parseInt(key.slice(slash + 1), 10);
+    const letter = pitchPart[0].toUpperCase();
+    let acc = 0;
+    for (let i = 1; i < pitchPart.length; i++) {
+      if (pitchPart[i] === '#') acc++;
+      else if (pitchPart[i] === 'b') acc--;
+    }
+    const semi = pitchSemitones({ letter, accidental: acc, octave: oct });
+    const d = semi - middleSemi;
+    if (Math.abs(d) > Math.abs(furthest)) furthest = d;
+  }
+  const dir = furthest > 0 ? -1 : 1;
+  notes.forEach(n => n.setStemDirection(dir));
+  return dir;
 }
 function makeWholeRest(VF, clef) {
   const key = clef === 'bass' ? 'd/3' : 'b/4';
@@ -1562,16 +1590,20 @@ function makeEighthRest(VF, clef) {
   return new VF.StaveNote({ clef, keys: [key], duration: '8r' });
 }
 
-function drawChordVoice(VF, ctx, stave, notes, articulation, width) {
+function drawChordVoice(VF, ctx, stave, notes, articulation, width, clef) {
   const voice = articulation === 'block'
     ? new VF.Voice({ num_beats: 4, beat_value: 4 })
     : new VF.Voice({ num_beats: 3, beat_value: 8 });
   voice.addTickables(notes);
-  // Construct the Beam BEFORE voice.draw so VexFlow marks the notes as
-  // beamed and skips drawing their flags. One beam group covers all three
-  // eighth notes (generateBeams' default 2+1 grouping is wrong here).
   let beam = null;
-  if (articulation === 'arpeggio') beam = new VF.Beam(notes);
+  if (articulation === 'arpeggio') {
+    // Force a single stem direction across the beam group, then construct the
+    // Beam BEFORE voice.draw so VexFlow marks the notes as beamed and skips
+    // their flags. (generateBeams' default beat-based grouping splits 3
+    // eighths into 2+1, so we build one Beam manually.)
+    unifyBeamStemDirection(notes, clef);
+    beam = new VF.Beam(notes);
+  }
   new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
   voice.draw(ctx, stave);
   if (beam) beam.setContext(ctx).draw();
@@ -1629,7 +1661,7 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
     otherNotes = [makeWholeRest(VF, otherClef)];
   }
 
-  drawChordVoice(VF, ctx, chordStave, chordNotes, articulation, width);
+  drawChordVoice(VF, ctx, chordStave, chordNotes, articulation, width, chordClef);
   const restVoice = new VF.Voice({ num_beats: 4, beat_value: 4 });
   restVoice.addTickables(otherNotes);
   new VF.Formatter().joinVoices([restVoice]).format([restVoice], width - 80);
@@ -1729,7 +1761,7 @@ function renderNotation(card, container) {
     const notes = articulation === 'block'
       ? [makeBlockNote(VF, clef, pitches, addAcc)]
       : makeArpNotes(VF, clef, pitches, direction, addAcc);
-    drawChordVoice(VF, ctx, stave, notes, articulation, width);
+    drawChordVoice(VF, ctx, stave, notes, articulation, width, clef);
     return;
   }
 
