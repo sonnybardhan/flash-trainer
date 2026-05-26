@@ -271,6 +271,31 @@ async function playChord(pitches, opts) {
   });
 }
 
+// Play a sequence of pitches one at a time, evenly spaced. Used by the
+// interval drill (two notes) and degree drill (chord then single tone).
+// Each entry can be either a single pitch or an array of pitches (chord).
+// gapSec controls spacing between successive entries. Each entry sustains
+// for durationSec.
+async function playSequence(entries, gapSec = 0.5, durationSec = 0.9) {
+  if (!entries || !entries.length) return;
+  const presetId = (state.notation && state.notation.pianoPreset) || DEFAULT_PRESET_ID;
+  try { await _ensurePreset(presetId); }
+  catch (e) { console.warn('[sound] preset load failed', e); return; }
+  if (!audioCtx || !_activePresetData) return;
+  _stopActiveNotes();
+  const t0 = audioCtx.currentTime + 0.04;
+  const target = _outputNode || audioCtx.destination;
+  entries.forEach((entry, i) => {
+    const pitches = Array.isArray(entry) ? entry : [entry];
+    const t = t0 + i * gapSec;
+    for (const p of pitches) {
+      const env = _player.queueWaveTable(audioCtx, target, _activePresetData,
+                                          t, pitchToMidi(p), durationSec);
+      if (env) _activeEnvelopes.push(env);
+    }
+  });
+}
+
 // Quick preview — play a C major triad with the current voicing/EQ/preset
 // settings so the user can audition the sound without starting a session.
 async function previewChord(articulation) {

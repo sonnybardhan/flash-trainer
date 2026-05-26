@@ -255,6 +255,22 @@
   }
   .segment.active { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 
+  /* Drill type pill: equal-width segments, slightly larger touch area */
+  .drill-segment {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+  }
+  .drill-segment .segment {
+    text-align: center; padding: 9px 4px; font-size: 12px;
+  }
+
+  /* Mode picker chips: single line per chip with mode name */
+  .mode-hint {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text-faint); letter-spacing: 0.5px;
+  }
+
   /* ================= SIDE-BY-SIDE ================= */
   .two-col {
     display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
@@ -779,6 +795,97 @@
   .badge-medium { background: var(--badge-med-bg); color: var(--badge-med-fg); border: 1px solid var(--badge-med-bd); }
   .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
 
+  /* ================ Interval / Degree drill UI ================ */
+  /* Mode/chord tag shown above notation in degree drill */
+  .card-mode-tag {
+    font-family: var(--mono);
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+    min-height: 1.2em;
+    display: none;
+  }
+  .flash-card.drill-degrees .card-mode-tag { display: block; }
+
+  /* Reveal label between/after notation: interval name or degree number */
+  .card-reveal-label {
+    font-family: var(--serif);
+    font-size: clamp(28px, 7vw, 40px);
+    font-weight: 300;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    margin-top: 14px;
+    min-height: 1.2em;
+    display: none;
+  }
+  .flash-card.drill-intervals .card-reveal-label,
+  .flash-card.drill-degrees   .card-reveal-label { display: block; }
+  .card-reveal-label.hidden { visibility: hidden; }
+  .card-reveal-label.correct { color: #4ec6c0; }
+  .card-reveal-label.wrong   { color: var(--danger); }
+
+  /* Answer chips area below the card body */
+  .card-answer-chips {
+    display: none;
+    width: 100%; max-width: 440px;
+    margin-top: 22px;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .flash-card.drill-intervals .card-answer-chips,
+  .flash-card.drill-degrees   .card-answer-chips { display: flex; }
+
+  .answer-chip {
+    flex: 0 0 auto;
+    min-width: 58px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--mono); font-size: 14px; font-weight: 500;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.12s, background 0.18s, border-color 0.18s, color 0.18s;
+    user-select: none;
+  }
+  .answer-chip:active { transform: scale(0.95); }
+  .answer-chip.correct {
+    background: #4ec6c026;
+    border-color: #4ec6c0;
+    color: #4ec6c0;
+    font-weight: 700;
+  }
+  .answer-chip.wrong {
+    background: rgba(201, 93, 75, 0.18);
+    border-color: var(--danger);
+    color: var(--danger);
+    font-weight: 700;
+  }
+  .answer-chip.disabled {
+    pointer-events: none;
+    opacity: 0.55;
+  }
+  .answer-chip.disabled.correct,
+  .answer-chip.disabled.wrong { opacity: 1; }
+
+  /* Hide chord-mode card content when in interval/degree drill */
+  .flash-card.drill-intervals .card-root,
+  .flash-card.drill-intervals .card-quality,
+  .flash-card.drill-intervals .card-inversion,
+  .flash-card.drill-intervals .card-focus-badge,
+  .flash-card.drill-intervals .card-name-overlay,
+  .flash-card.drill-degrees   .card-root,
+  .flash-card.drill-degrees   .card-quality,
+  .flash-card.drill-degrees   .card-inversion,
+  .flash-card.drill-degrees   .card-focus-badge,
+  .flash-card.drill-degrees   .card-name-overlay { display: none; }
+
+  /* Degree drill: notation only rendered on reveal; pre-answer stays empty */
+  .flash-card.drill-degrees .card-notation { min-height: 220px; }
+  .flash-card.drill-intervals .card-notation { min-height: 220px; }
+
   .flash-footer {
     display: flex; gap: 10px; padding-bottom: 10px; padding-top: 10px;
     border-top: 1px solid var(--border);
@@ -927,4 +1034,6 @@
     .root-grid .chip { padding: 11px 0; font-size: 13px; min-height: 42px; }
     .chip.preset { padding: 5px 9px; font-size: 11px; }
     .segment { padding: 5px 9px; font-size: 10px; }
+    .drill-segment .segment { padding: 8px 4px; font-size: 11px; }
+    .answer-chip { padding: 10px 4px; font-size: 13px; }
   }

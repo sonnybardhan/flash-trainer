@@ -938,6 +938,176 @@ function renderChordNameOverlay(card) {
 }
 
 // ============================================================
+// Helpers for non-chord drills (interval + degree)
+// ============================================================
+// Choose the clef the pitch sits most naturally on for single-staff render.
+function clefForPitch(pitch) {
+  const splitSemi = pitchSemitones(parsePitchName('C4'));
+  return pitchSemitones(pitch) >= splitSemi ? 'treble' : 'bass';
+}
+
+// Decide whether to render on a single staff or grand staff for a set of pitches.
+function preferredClefLayout(pitches) {
+  const ns = state.notation;
+  if (ns.clef === 'treble') return { mode: 'single', clef: 'treble' };
+  if (ns.clef === 'bass')   return { mode: 'single', clef: 'bass'   };
+  // Grand: if all pitches fit comfortably on one clef, use that single staff,
+  // else use the grand layout.
+  const splitSemi = pitchSemitones(parsePitchName('C4'));
+  const semis = pitches.map(p => pitchSemitones(p));
+  const allTreble = semis.every(s => s >= splitSemi - 2);
+  const allBass   = semis.every(s => s <  splitSemi + 2);
+  if (allTreble) return { mode: 'single', clef: 'treble' };
+  if (allBass)   return { mode: 'single', clef: 'bass'   };
+  return { mode: 'grand' };
+}
+
+// Render two notes (interval) on a staff. Direction (up/down) is conveyed
+// purely by which note is higher. Always rendered as two separate beats so
+// they read as a sequence, not a simultaneous dyad.
+function renderTwoNoteStave(noteA, noteB, container) {
+  container.replaceChildren();
+  const VF = Vex.Flow;
+  const ns = state.notation;
+  const layout = preferredClefLayout([noteA, noteB]);
+  const width = 360;
+  const height = layout.mode === 'grand' ? 220 : 150;
+  const ctx = setupRenderer(VF, container, width, height);
+  const keyName = null; // intervals don't have a key signature
+  const addAcc = (note, ps) => {
+    ps.forEach((p, i) => {
+      const accStr = accidentalModifierFor(p.accidental, impliedAccidental(keyName, p.letter));
+      if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
+    });
+  };
+  if (layout.mode === 'single') {
+    const clef = layout.clef;
+    const stave = new VF.Stave(8, 18, width - 16);
+    stave.addClef(clef);
+    stave.setContext(ctx).draw();
+    const n1 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteA)], duration: 'h', auto_stem: true });
+    addAcc(n1, [noteA]);
+    const n2 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteB)], duration: 'h', auto_stem: true });
+    addAcc(n2, [noteB]);
+    const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    voice.addTickables([n1, n2]);
+    new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
+    voice.draw(ctx, stave);
+    return;
+  }
+  // Grand staff: each note placed on its natural clef, in same time column.
+  const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
+  const slot = (pitch, clef) => {
+    const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(pitch)], duration: 'h', auto_stem: true });
+    addAcc(n, [pitch]);
+    return n;
+  };
+  const restH = (clef) => new VF.StaveNote({ clef, keys: [clef === 'bass' ? 'd/3' : 'b/4'], duration: 'hr' });
+  const clefA = clefForPitch(noteA);
+  const clefB = clefForPitch(noteB);
+  const trebleSlots = [];
+  const bassSlots = [];
+  [{p: noteA, c: clefA}, {p: noteB, c: clefB}].forEach(({p, c}) => {
+    if (c === 'treble') {
+      trebleSlots.push(slot(p, 'treble'));
+      bassSlots.push(restH('bass'));
+    } else {
+      bassSlots.push(slot(p, 'bass'));
+      trebleSlots.push(restH('treble'));
+    }
+  });
+  const tV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+  const bV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+  tV.addTickables(trebleSlots);
+  bV.addTickables(bassSlots);
+  new VF.Formatter().joinVoices([tV, bV]).format([tV, bV], width - 100);
+  tV.draw(ctx, trebleStave);
+  bV.draw(ctx, bassStave);
+}
+
+// Render a triad followed by a single test tone (for degree drill reveal).
+function renderTriadPlusTone(triadPitches, tonePitch, container) {
+  container.replaceChildren();
+  const VF = Vex.Flow;
+  const width = 360;
+  const allPitches = [...triadPitches, tonePitch];
+  const layout = preferredClefLayout(allPitches);
+  const height = layout.mode === 'grand' ? 220 : 150;
+  const ctx = setupRenderer(VF, container, width, height);
+  const addAcc = (note, ps) => {
+    ps.forEach((p, i) => {
+      const accStr = accidentalModifierFor(p.accidental, impliedAccidental(null, p.letter));
+      if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
+    });
+  };
+  if (layout.mode === 'single') {
+    const clef = layout.clef;
+    const stave = new VF.Stave(8, 18, width - 16);
+    stave.addClef(clef);
+    stave.setContext(ctx).draw();
+    const chordNote = new VF.StaveNote({
+      clef, keys: triadPitches.map(pitchToVexKey), duration: 'h', auto_stem: true
+    });
+    addAcc(chordNote, triadPitches);
+    const toneNote = new VF.StaveNote({
+      clef, keys: [pitchToVexKey(tonePitch)], duration: 'h', auto_stem: true
+    });
+    addAcc(toneNote, [tonePitch]);
+    const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    voice.addTickables([chordNote, toneNote]);
+    new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
+    voice.draw(ctx, stave);
+    return;
+  }
+  // Grand-staff fallback: put chord on the clef matching most pitches, tone wherever it lives.
+  const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, null);
+  const splitSemi = pitchSemitones(parsePitchName('C4'));
+  const triadOnTreble = triadPitches.every(p => pitchSemitones(p) >= splitSemi);
+  const triadClef = triadOnTreble ? 'treble' : 'bass';
+  const triadStave = triadOnTreble ? trebleStave : bassStave;
+  const otherClefT = triadOnTreble ? 'bass' : 'treble';
+  const otherStaveT = triadOnTreble ? bassStave : trebleStave;
+  const toneClef = clefForPitch(tonePitch);
+
+  const chordNote = new VF.StaveNote({
+    clef: triadClef, keys: triadPitches.map(pitchToVexKey), duration: 'h', auto_stem: true
+  });
+  addAcc(chordNote, triadPitches);
+  const restH = (clef) => new VF.StaveNote({ clef, keys: [clef === 'bass' ? 'd/3' : 'b/4'], duration: 'hr' });
+
+  // Two columns: chord then tone.
+  let trebleSlots, bassSlots;
+  if (toneClef === triadClef) {
+    const toneNote = new VF.StaveNote({ clef: toneClef, keys: [pitchToVexKey(tonePitch)], duration: 'h', auto_stem: true });
+    addAcc(toneNote, [tonePitch]);
+    if (triadClef === 'treble') {
+      trebleSlots = [chordNote, toneNote];
+      bassSlots   = [restH('bass'), restH('bass')];
+    } else {
+      bassSlots   = [chordNote, toneNote];
+      trebleSlots = [restH('treble'), restH('treble')];
+    }
+  } else {
+    const toneNote = new VF.StaveNote({ clef: toneClef, keys: [pitchToVexKey(tonePitch)], duration: 'h', auto_stem: true });
+    addAcc(toneNote, [tonePitch]);
+    if (triadClef === 'treble') {
+      trebleSlots = [chordNote, restH('treble')];
+      bassSlots   = [restH('bass'), toneNote];
+    } else {
+      bassSlots   = [chordNote, restH('bass')];
+      trebleSlots = [restH('treble'), toneNote];
+    }
+  }
+  const tV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+  const bV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+  tV.addTickables(trebleSlots);
+  bV.addTickables(bassSlots);
+  new VF.Formatter().joinVoices([tV, bV]).format([tV, bV], width - 100);
+  tV.draw(ctx, trebleStave);
+  bV.draw(ctx, bassStave);
+}
+
+// ============================================================
 // Playback pitch computation
 // ============================================================
 // Returns the pitches that should sound for a card, based on the

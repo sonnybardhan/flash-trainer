@@ -52,6 +52,8 @@ const state = {
   session: null,
   // Notation Mode settings (§12 defaults)
   notation: {
+    drillType: 'chords',         // chords | intervals | degrees
+    degreeModes: ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'],
     format: 'notation',          // text | notation | both
     clef: 'treble',              // treble | bass | both
     voicing: 'closed',           // closed | open | mixed
@@ -530,25 +532,36 @@ function setActiveSegment(segmentId, attr, value) {
 }
 function updateNotationRowVisibility() {
   const ns = state.notation;
+  const drill = ns.drillType || 'chords';
+  const isChord = drill === 'chords';
   const isNotation = ns.format === 'notation';
-  $('clef-row').style.display = isNotation ? 'flex' : 'none';
+  $('clef-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
   // Voicing only meaningful in Both (single-staff modes force Closed, §3.2).
   // Surfaced whenever Clef=Both, even in chord-label mode, since voicing
   // also drives playback pitches.
-  $('voicing-row').style.display = ns.clef === 'both' ? 'flex' : 'none';
-  $('articulation-row').style.display = isNotation ? 'flex' : 'none';
-  const showDir = isNotation && ns.articulation !== 'block';
+  $('voicing-row').style.display = (isChord && ns.clef === 'both') ? 'flex' : 'none';
+  $('articulation-row').style.display = (isChord && isNotation) ? 'flex' : 'none';
+  const showDir = isChord && isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
-  $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
-  $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
-  $('range-row').style.display = isNotation ? 'flex' : 'none';
-  $('show-name-row').style.display = isNotation ? 'flex' : 'none';
+  $('accidentals-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
+  $('unconventional-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
+  $('range-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
+  $('show-name-row').style.display =
+    drill === 'degrees' ? 'none' :
+    drill === 'intervals' ? 'flex' :
+    (isNotation ? 'flex' : 'none');
   // Double root in bass: visible when Clef=Both + Closed, regardless of
   // display mode (also affects playback).
-  const showDoubleRoot = ns.clef === 'both' && ns.voicing === 'closed';
+  const showDoubleRoot = isChord && ns.clef === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
-  $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
+  $('label-style-row').style.display = (isChord && !isNotation) ? 'flex' : 'none';
+  // Difficulty / format toggles: chord-drill only.
+  $('difficulty-row').style.display = isChord ? 'flex' : 'none';
+  $('difficulty-custom-row').style.display =
+    (isChord && activeDifficulty === null) ? 'flex' : 'none';
+  const formatRow = $('format-segment').closest('.form-row');
+  if (formatRow) formatRow.style.display = isChord ? 'flex' : 'none';
   // Piano preset dropdown + preview + EQ row only when sound is on.
   $('piano-preset-row').style.display = ns.playSound ? 'flex' : 'none';
   $('piano-preview-row').style.display = ns.playSound ? 'flex' : 'none';
@@ -664,6 +677,11 @@ function loadNotationSettings() {
 // Apply loaded settings to all notation UI controls.
 function applyNotationSettingsToUI() {
   const ns = state.notation;
+  if (!ns.drillType) ns.drillType = 'chords';
+  if (!Array.isArray(ns.degreeModes) || ns.degreeModes.length === 0) {
+    ns.degreeModes = ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'];
+  }
+  setActiveSegment('drill-segment', 'drill', ns.drillType);
   setActiveSegment('format-segment', 'format', ns.format);
   setActiveSegment('clef-segment', 'clef', ns.clef);
   setActiveSegment('voicing-segment', 'voicing', ns.voicing);
@@ -682,7 +700,65 @@ function applyNotationSettingsToUI() {
   applyEQ();
   if (ns.playSound) prefetchPianoEngine();
   updateRangeCurrentLabel();
+  renderModeChips();
+  updateDrillVisibility();
   updateNotationRowVisibility();
+}
+
+// Show/hide drill-specific sections based on the active drill type.
+// (Notation row visibility is handled by updateNotationRowVisibility, which
+// is drill-aware.)
+function updateDrillVisibility() {
+  const drill = state.notation.drillType || 'chords';
+  document.querySelectorAll('.drill-chords-only').forEach(el => {
+    el.style.display = drill === 'chords' ? '' : 'none';
+  });
+  document.querySelectorAll('.drill-degrees-only').forEach(el => {
+    el.style.display = drill === 'degrees' ? '' : 'none';
+  });
+  const showLabel = $('show-name-label');
+  if (showLabel) {
+    showLabel.textContent =
+      drill === 'intervals' ? 'Show interval name' :
+      drill === 'degrees'   ? 'Show degree' :
+                              'Show chord name';
+  }
+}
+
+// Degree-drill mode picker chips.
+const DEGREE_MODE_LABELS = {
+  ionian:     'Ionian',
+  lydian:     'Lydian',
+  mixolydian: 'Mixolydian',
+  dorian:     'Dorian',
+  phrygian:   'Phrygian',
+  aeolian:    'Aeolian'
+};
+const DEGREE_MODE_ORDER = ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'];
+
+function renderModeChips() {
+  const c = $('mode-chips');
+  if (!c) return;
+  c.replaceChildren();
+  const active = new Set(state.notation.degreeModes || []);
+  DEGREE_MODE_ORDER.forEach(id => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (active.has(id) ? ' active' : '');
+    b.textContent = DEGREE_MODE_LABELS[id];
+    b.onclick = () => {
+      const set = new Set(state.notation.degreeModes || []);
+      if (set.has(id)) {
+        if (set.size === 1) return; // keep at least one mode selected
+        set.delete(id);
+      } else {
+        set.add(id);
+      }
+      state.notation.degreeModes = DEGREE_MODE_ORDER.filter(m => set.has(m));
+      saveNotationSettings();
+      renderModeChips();
+    };
+    c.appendChild(b);
+  });
 }
 
 function populatePianoPresetSelect() {
@@ -710,18 +786,23 @@ function setPianoPreset(presetId) {
   saveNotationSettings();
 }
 function rerenderCurrentCard() {
-  if (state.session && state.session.lastCard) {
-    const fc = $('flash-card');
-    fc.classList.toggle('format-notation', state.notation.format === 'notation');
-    fc.classList.toggle('format-text', state.notation.format === 'text');
-    fc.classList.toggle('notation-grand', state.notation.clef === 'both');
-    if (state.notation.format === 'notation') {
-      renderNotation(state.session.lastCard, $('card-notation'));
-    } else {
-      $('card-notation').replaceChildren();
-    }
-    renderChordNameOverlay(state.session.lastCard);
+  if (!state.session || !state.session.lastCard) return;
+  const card = state.session.lastCard;
+  // Interval/degree cards re-render via their own helpers; settings changes
+  // mid-session for these drills are limited (mostly clef/range), so we just
+  // re-run the per-drill render.
+  if (card.drill === 'interval') { renderIntervalCard(card); return; }
+  if (card.drill === 'degree')   { renderDegreeCard(card);   return; }
+  const fc = $('flash-card');
+  fc.classList.toggle('format-notation', state.notation.format === 'notation');
+  fc.classList.toggle('format-text', state.notation.format === 'text');
+  fc.classList.toggle('notation-grand', state.notation.clef === 'both');
+  if (state.notation.format === 'notation') {
+    renderNotation(card, $('card-notation'));
+  } else {
+    $('card-notation').replaceChildren();
   }
+  renderChordNameOverlay(card);
 }
 $('format-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -730,6 +811,15 @@ $('format-segment').addEventListener('click', (e) => {
   setActiveSegment('format-segment', 'format', state.notation.format);
   updateNotationRowVisibility();
   rerenderCurrentCard();
+  saveNotationSettings();
+});
+$('drill-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.drillType = seg.dataset.drill;
+  setActiveSegment('drill-segment', 'drill', state.notation.drillType);
+  updateDrillVisibility();
+  updateNotationRowVisibility();
   saveNotationSettings();
 });
 $('articulation-segment').addEventListener('click', (e) => {
@@ -1055,17 +1145,25 @@ function shuffle(arr) {
 
 function nextCard() {
   const s = state.session;
-  if (s.queue.length === 0) {
-    s.queue = buildQueue();
-    if (s.lastCard && s.queue[0] &&
-        s.queue[0].spelling === s.lastCard.spelling &&
-        s.queue[0].quality === s.lastCard.quality &&
-        s.queue[0].inversion === s.lastCard.inversion &&
-        s.queue.length > 1) {
-      [s.queue[0], s.queue[1]] = [s.queue[1], s.queue[0]];
+  const drill = state.notation.drillType || 'chords';
+  let card;
+  if (drill === 'intervals') {
+    card = buildIntervalCard();
+  } else if (drill === 'degrees') {
+    card = buildDegreeCard();
+  } else {
+    if (s.queue.length === 0) {
+      s.queue = buildQueue();
+      if (s.lastCard && s.queue[0] &&
+          s.queue[0].spelling === s.lastCard.spelling &&
+          s.queue[0].quality === s.lastCard.quality &&
+          s.queue[0].inversion === s.lastCard.inversion &&
+          s.queue.length > 1) {
+        [s.queue[0], s.queue[1]] = [s.queue[1], s.queue[0]];
+      }
     }
+    card = s.queue.shift();
   }
-  const card = s.queue.shift();
   s.lastCard = card;
   s.cardCount++;
   s.beatsSinceCardChange = 0;
@@ -1076,9 +1174,43 @@ function nextCard() {
   }
 }
 
-
+function progressText() {
+  return state.session.mode === 'count'
+    ? `${state.session.cardCount} / ${state.session.target}`
+    : `${state.session.cardCount}`;
+}
 
 function renderCard(card) {
+  const fc = $('flash-card');
+  fc.classList.remove('drill-chords', 'drill-intervals', 'drill-degrees');
+  const drillClass = card.drill === 'interval' ? 'drill-intervals'
+                   : card.drill === 'degree'   ? 'drill-degrees'
+                                               : 'drill-chords';
+  fc.classList.add(drillClass);
+
+  // Always reset shared per-card UI elements.
+  const revealLabel = $('card-reveal-label');
+  revealLabel.classList.remove('correct', 'wrong', 'hidden');
+  revealLabel.textContent = '';
+  $('card-mode-tag').textContent = '';
+
+  if (card.drill === 'interval') {
+    renderIntervalCard(card);
+    $('stat-progress').textContent = progressText();
+    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    maybePlayIntervalAudio(card);
+    return;
+  }
+  if (card.drill === 'degree') {
+    renderDegreeCard(card);
+    $('stat-progress').textContent = progressText();
+    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    playDegreeChordAndTone(card);
+    return;
+  }
+
+  // Chord drill — existing behavior.
+  $('card-answer-chips').replaceChildren();
   renderChordLabel(card);
   const badge = $('card-focus-badge');
   if (card.focus) {
@@ -1087,10 +1219,7 @@ function renderCard(card) {
   } else {
     badge.className = 'card-focus-badge empty';
   }
-  $('stat-progress').textContent = state.session.mode === 'count'
-    ? `${state.session.cardCount} / ${state.session.target}`
-    : `${state.session.cardCount}`;
-  const fc = $('flash-card');
+  $('stat-progress').textContent = progressText();
   fc.classList.toggle('format-notation', state.notation.format === 'notation');
   fc.classList.toggle('format-text', state.notation.format === 'text');
   fc.classList.toggle('notation-grand', state.notation.clef === 'both');
@@ -1226,27 +1355,39 @@ document.addEventListener('click', (e) => {
 // Session start / end
 // ============================================================
 $('start-btn').addEventListener('click', () => {
-  if (state.selectedSpellings.size === 0) {
-    showModal({
-      title: 'Pick at least one root',
-      body: 'You need to select at least one root note to start.',
-      actions: [
-        { label: 'Use all', kind: 'primary', onClick: () => {
-          state.selectedSpellings = new Set(SPELLING_IDS);
-          renderRootChips();
-        }},
-        { label: 'OK', kind: 'secondary' }
-      ]
-    });
-    return;
-  }
-  if (state.selectedQualities.size === 0 || state.selectedInversions.size === 0) {
-    showModal({
-      title: 'Almost there',
-      body: 'Pick at least one chord quality and one inversion to start.',
-      actions: [{ label: 'OK', kind: 'primary' }]
-    });
-    return;
+  const drill = state.notation.drillType || 'chords';
+  if (drill === 'chords') {
+    if (state.selectedSpellings.size === 0) {
+      showModal({
+        title: 'Pick at least one root',
+        body: 'You need to select at least one root note to start.',
+        actions: [
+          { label: 'Use all', kind: 'primary', onClick: () => {
+            state.selectedSpellings = new Set(SPELLING_IDS);
+            renderRootChips();
+          }},
+          { label: 'OK', kind: 'secondary' }
+        ]
+      });
+      return;
+    }
+    if (state.selectedQualities.size === 0 || state.selectedInversions.size === 0) {
+      showModal({
+        title: 'Almost there',
+        body: 'Pick at least one chord quality and one inversion to start.',
+        actions: [{ label: 'OK', kind: 'primary' }]
+      });
+      return;
+    }
+  } else if (drill === 'degrees') {
+    if (!state.notation.degreeModes || state.notation.degreeModes.length === 0) {
+      showModal({
+        title: 'Pick at least one mode',
+        body: 'The degree drill needs at least one mode enabled.',
+        actions: [{ label: 'OK', kind: 'primary' }]
+      });
+      return;
+    }
   }
 
   const mode = $('mode-select').value;
@@ -1274,20 +1415,26 @@ $('start-btn').addEventListener('click', () => {
 
   // Prime the AudioContext synchronously from inside the click gesture
   // so resume() is allowed when Play Sound is on but the metronome is off.
-  // (The metronome path was previously the only place that primed it.)
-  if (state.notation.playSound) {
+  // Also prime for interval/degree drills since their replay buttons and
+  // (for degrees) chord+tone playback both need an active context.
+  if (state.notation.playSound || drill !== 'chords') {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    if (drill !== 'chords') prefetchPianoEngine();
   }
 
+  // Chip-driven drills force manual advance; the user controls progression
+  // by selecting an answer.
+  const effectiveAdvance = (drill === 'chords') ? advance : 'manual';
+
   state.session = {
-    mode, advance, target,
+    mode, advance: effectiveAdvance, target,
     secondsPerCard: state.steppers.seconds,
     beatsPerCard: state.steppers.beats,
     barsPerCard: state.steppers.bars,
     cardCount: 0,
     beatsSinceCardChange: 0,
-    queue: buildQueue(),
+    queue: drill === 'chords' ? buildQueue() : [],
     lastCard: null,
     notes: [],
     startedAt: Date.now(),
@@ -1300,7 +1447,7 @@ $('start-btn').addEventListener('click', () => {
   document.body.style.overflow = 'hidden';
   nextCard();
   startTimer();
-  if (advance === 'seconds') startAutoAdvance();
+  if (effectiveAdvance === 'seconds') startAutoAdvance();
   if (state.metronome.enabled) startMetronome();
 });
 
@@ -1325,9 +1472,16 @@ function startAutoAdvance() {
   }, state.session.secondsPerCard * 1000);
 }
 
-$('flash-card').addEventListener('click', () => {
+$('flash-card').addEventListener('click', (e) => {
   const s = state.session;
   if (!s || s.pauseStartedAt) return;
+  // For interval/degree drills, ignore taps on chips (they have their own
+  // handlers) and only advance once the card has been answered.
+  if (s.lastCard && (s.lastCard.drill === 'interval' || s.lastCard.drill === 'degree')) {
+    if (e.target.closest('.answer-chip')) return;
+    if (s.lastCard.answered && s.advance === 'manual') nextCard();
+    return;
+  }
   const ns = state.notation;
   // Tap-to-reveal: in notation mode, first tap reveals the name; in manual
   // advance the second tap advances. In time-based advance, tap only reveals.
@@ -1418,6 +1572,14 @@ $('replay-btn').addEventListener('click', async () => {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   const card = state.session.lastCard;
+  if (card.drill === 'interval') {
+    await replayIntervalAudio(card);
+    return;
+  }
+  if (card.drill === 'degree') {
+    await replayDegreeChord(card);
+    return;
+  }
   const pitches = computePlaybackPitches(card);
   if (!pitches) return;
   const articulation = resolveArticulation(state.notation.articulation);
