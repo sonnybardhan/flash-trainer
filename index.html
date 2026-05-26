@@ -858,6 +858,14 @@
           <div class="segment" data-label-style="figured">Figured</div>
         </div>
       </div>
+      <div class="form-row" id="range-low-row">
+        <label>Range low</label>
+        <select id="range-low-select"></select>
+      </div>
+      <div class="form-row" id="range-high-row">
+        <label>Range high</label>
+        <select id="range-high-select"></select>
+      </div>
     </div>
   </div>
 
@@ -2037,11 +2045,65 @@ function updateNotationRowVisibility() {
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
   $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
   $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
+  $('range-low-row').style.display = isNotation ? 'flex' : 'none';
+  $('range-high-row').style.display = isNotation ? 'flex' : 'none';
   // Double root only meaningful in Both + Closed.
   const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
+}
+
+// ============================================================
+// Notation settings — persistence and range UI
+// ============================================================
+const NOTATION_STORAGE_KEY = 'rep-trainer-notation';
+function saveNotationSettings() {
+  try { localStorage.setItem(NOTATION_STORAGE_KEY, JSON.stringify(state.notation)); } catch {}
+}
+function loadNotationSettings() {
+  try {
+    const raw = localStorage.getItem(NOTATION_STORAGE_KEY);
+    if (raw) Object.assign(state.notation, JSON.parse(raw));
+  } catch {}
+}
+
+// Pitch list for the Range dropdowns: naturals from C2 to C6.
+const RANGE_NOTES = (() => {
+  const out = [];
+  const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  for (let oct = 2; oct <= 5; oct++) for (const l of letters) out.push(`${l}${oct}`);
+  out.push('C6');
+  return out;
+})();
+
+function populateRangeSelects() {
+  const low = $('range-low-select');
+  const high = $('range-high-select');
+  low.replaceChildren();
+  high.replaceChildren();
+  for (const n of RANGE_NOTES) {
+    const o1 = document.createElement('option'); o1.value = n; o1.textContent = n; low.appendChild(o1);
+    const o2 = document.createElement('option'); o2.value = n; o2.textContent = n; high.appendChild(o2);
+  }
+  low.value = state.notation.rangeLow;
+  high.value = state.notation.rangeHigh;
+}
+
+// Apply loaded settings to all notation UI controls.
+function applyNotationSettingsToUI() {
+  const ns = state.notation;
+  setActiveSegment('format-segment', 'format', ns.format);
+  setActiveSegment('hand-segment', 'hand', ns.hand);
+  setActiveSegment('voicing-segment', 'voicing', ns.voicing);
+  setActiveSegment('articulation-segment', 'articulation', ns.articulation);
+  setActiveSegment('arp-dir-segment', 'direction', ns.arpeggioDirection);
+  setActiveSegment('accidentals-segment', 'accidentals', ns.accidentals);
+  setActiveSegment('label-style-segment', 'labelStyle', ns.labelStyle);
+  $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
+  $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
+  populateRangeSelects();
+  updateNotationRowVisibility();
 }
 function rerenderCurrentCard() {
   if (state.session && state.session.lastCard) {
@@ -2062,6 +2124,7 @@ $('format-segment').addEventListener('click', (e) => {
   setActiveSegment('format-segment', 'format', state.notation.format);
   updateNotationRowVisibility();
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('articulation-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2070,6 +2133,7 @@ $('articulation-segment').addEventListener('click', (e) => {
   setActiveSegment('articulation-segment', 'articulation', state.notation.articulation);
   updateNotationRowVisibility();
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('arp-dir-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2077,6 +2141,7 @@ $('arp-dir-segment').addEventListener('click', (e) => {
   state.notation.arpeggioDirection = seg.dataset.direction;
   setActiveSegment('arp-dir-segment', 'direction', state.notation.arpeggioDirection);
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('accidentals-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2084,6 +2149,7 @@ $('accidentals-segment').addEventListener('click', (e) => {
   state.notation.accidentals = seg.dataset.accidentals;
   setActiveSegment('accidentals-segment', 'accidentals', state.notation.accidentals);
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('hand-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2094,16 +2160,20 @@ $('hand-segment').addEventListener('click', (e) => {
   const d = defaultRangeForHand(hand);
   state.notation.rangeLow = d.low;
   state.notation.rangeHigh = d.high;
+  $('range-low-select').value = d.low;
+  $('range-high-select').value = d.high;
   // Force a fresh clef pick on next render for Both mode.
   if (state.session && state.session.lastCard) delete state.session.lastCard.chordClef;
   setActiveSegment('hand-segment', 'hand', hand);
   updateNotationRowVisibility();
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('double-root-switch').addEventListener('click', () => {
   state.notation.doubleRootInBass = !state.notation.doubleRootInBass;
   $('double-root-switch').classList.toggle('on', state.notation.doubleRootInBass);
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('voicing-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2118,11 +2188,13 @@ $('voicing-segment').addEventListener('click', (e) => {
   setActiveSegment('voicing-segment', 'voicing', state.notation.voicing);
   updateNotationRowVisibility();
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('unconventional-switch').addEventListener('click', () => {
   state.notation.unconventionalSpellings = !state.notation.unconventionalSpellings;
   $('unconventional-switch').classList.toggle('on', state.notation.unconventionalSpellings);
   rerenderCurrentCard();
+  saveNotationSettings();
 });
 $('label-style-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2130,6 +2202,17 @@ $('label-style-segment').addEventListener('click', (e) => {
   state.notation.labelStyle = seg.dataset.labelStyle;
   setActiveSegment('label-style-segment', 'labelStyle', state.notation.labelStyle);
   if (state.session && state.session.lastCard) renderChordLabel(state.session.lastCard);
+  saveNotationSettings();
+});
+$('range-low-select').addEventListener('change', (e) => {
+  state.notation.rangeLow = e.target.value;
+  rerenderCurrentCard();
+  saveNotationSettings();
+});
+$('range-high-select').addEventListener('change', (e) => {
+  state.notation.rangeHigh = e.target.value;
+  rerenderCurrentCard();
+  saveNotationSettings();
 });
 
 $('add-focus-btn').addEventListener('click', () => {
@@ -2659,7 +2742,8 @@ $('accent-switch').classList.toggle('on', state.metronome.accent);
 $('bpm-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('meter-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('accent-row').style.display = state.metronome.enabled ? 'flex' : 'none';
-updateNotationRowVisibility();
+loadNotationSettings();
+applyNotationSettingsToUI();
 
 // First-use heuristic: if history is empty, open Metronome + Focus by default
 const historyExists = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length > 0;
