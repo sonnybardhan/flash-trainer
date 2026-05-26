@@ -377,12 +377,13 @@ function setupRenderer(VF, container, width, height) {
 }
 
 function buildGrandStaff(VF, ctx, width, keyName) {
-  const trebleStave = new VF.Stave(8, 8, width - 16);
+  // x=24 leaves room for the brace VexFlow draws just left of the stave start.
+  const trebleStave = new VF.Stave(24, 8, width - 32);
   trebleStave.addClef('treble');
   if (keyName) trebleStave.addKeySignature(keyName);
   trebleStave.setContext(ctx).draw();
 
-  const bassStave = new VF.Stave(8, 100, width - 16);
+  const bassStave = new VF.Stave(24, 100, width - 32);
   bassStave.addClef('bass');
   if (keyName) bassStave.addKeySignature(keyName);
   bassStave.setContext(ctx).draw();
@@ -432,15 +433,17 @@ function renderOpenGrand(card, container, ctx, VF, width, articulation, directio
   const placed = { bass: substituteAll(raw.bass), treble: substituteAll(raw.treble) };
 
   if (articulation === 'block') {
-    // Whole-note chord on each staff.
+    // Whole-note chord on each staff, aligned at the same x by formatting
+    // both voices together.
     const bassNote = makeBlockNote(VF, 'bass', placed.bass, addAcc);
     const trebleNote = makeBlockNote(VF, 'treble', placed.treble, addAcc);
-    [['bass', bassStave, [bassNote]], ['treble', trebleStave, [trebleNote]]].forEach(([_, stave, notes]) => {
-      const v = new VF.Voice({ num_beats: 4, beat_value: 4 });
-      v.addTickables(notes);
-      new VF.Formatter().joinVoices([v]).format([v], width - 80);
-      v.draw(ctx, stave);
-    });
+    const bassV   = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    const trebleV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    bassV.addTickables([bassNote]);
+    trebleV.addTickables([trebleNote]);
+    new VF.Formatter().joinVoices([bassV, trebleV]).format([bassV, trebleV], width - 100);
+    bassV.draw(ctx, bassStave);
+    trebleV.draw(ctx, trebleStave);
     return;
   }
 
@@ -468,12 +471,14 @@ function renderOpenGrand(card, container, ctx, VF, width, articulation, directio
       bassSlots.push(makeEighthRest(VF, 'bass'));
     }
   }
-  [[bassStave, bassSlots], [trebleStave, trebleSlots]].forEach(([stave, notes]) => {
-    const v = new VF.Voice({ num_beats: 3, beat_value: 8 });
-    v.addTickables(notes);
-    new VF.Formatter().joinVoices([v]).format([v], width - 80);
-    v.draw(ctx, stave);
-  });
+  // Format both voices together so the 3 tick columns align across staves.
+  const bassV   = new VF.Voice({ num_beats: 3, beat_value: 8 });
+  const trebleV = new VF.Voice({ num_beats: 3, beat_value: 8 });
+  bassV.addTickables(bassSlots);
+  trebleV.addTickables(trebleSlots);
+  new VF.Formatter().joinVoices([bassV, trebleV]).format([bassV, trebleV], width - 100);
+  bassV.draw(ctx, bassStave);
+  trebleV.draw(ctx, trebleStave);
 }
 
 function renderSkip(container) {
