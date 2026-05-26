@@ -448,6 +448,19 @@
     z-index: 5;
   }
   .quit-x:hover { color: var(--text); background: var(--surface-2); }
+  .replay-btn {
+    position: absolute; top: 10px; left: 6px;
+    width: 36px; height: 36px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: 16px; line-height: 1;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    padding-left: 3px; /* nudge the play glyph optical-center */
+    transition: color 0.15s, background 0.15s, transform 0.06s;
+    z-index: 5;
+  }
+  .replay-btn:hover { color: var(--text); background: var(--surface-2); }
+  .replay-btn:active { transform: scale(0.92); }
   /* #flashcard-view already has position: fixed, which scopes the absolute
      X button — do NOT override its position here. */
   .flash-stats {

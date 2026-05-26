@@ -194,7 +194,17 @@ function substitutePitch(p) {
   }
   return p;
 }
-function substituteAll(pitches) {
+// Specific (root, quality) combos whose theoretically-correct spelling
+// includes a double accidental that has no clean enharmonic in our root
+// list. We always render the correct double accidental for these,
+// regardless of the Unconventional Spellings toggle.
+//   Eb dim -> Bbb
+//   F# aug -> C##
+//   B  aug -> F##
+const ALWAYS_KEEP_DOUBLES = new Set(['Eb:diminished', 'F#:augmented', 'B:augmented']);
+
+function substituteAll(pitches, card) {
+  if (card && ALWAYS_KEEP_DOUBLES.has(`${card.spelling}:${card.quality}`)) return pitches;
   return pitches.map(substitutePitch);
 }
 
@@ -399,7 +409,7 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
   const placeRange = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
   const raw = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
   if (!raw) { renderSkip(container); return; }
-  const pitches = substituteAll(raw);
+  const pitches = substituteAll(raw, card);
 
   const chordNotes = articulation === 'block'
     ? [makeBlockNote(VF, chordClef, pitches, addAcc)]
@@ -430,7 +440,7 @@ function renderOpenGrand(card, container, ctx, VF, width, articulation, directio
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
   const raw = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
   if (!raw) { renderSkip(container); return; }
-  const placed = { bass: substituteAll(raw.bass), treble: substituteAll(raw.treble) };
+  const placed = { bass: substituteAll(raw.bass, card), treble: substituteAll(raw.treble, card) };
 
   if (articulation === 'block') {
     // Whole-note chord on each staff, aligned at the same x by formatting
@@ -517,7 +527,7 @@ function renderNotation(card, container) {
     const clef = ns.clef === 'bass' ? 'bass' : 'treble';
     const raw = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
     if (!raw) { renderSkip(container); return; }
-    const pitches = substituteAll(raw);
+    const pitches = substituteAll(raw, card);
     const stave = new VF.Stave(8, 18, width - 16);
     stave.addClef(clef);
     if (keyName) stave.addKeySignature(keyName);
@@ -945,13 +955,13 @@ function computePlaybackPitches(card) {
     const raw = placeChordInRange(card.spelling, card.quality, card.inversion,
                                    ns.rangeLow, ns.rangeHigh);
     if (!raw) return null;
-    return substituteAll(raw);
+    return substituteAll(raw, card);
   }
 
   if (effectiveVoicing === 'open') {
     const raw = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
     if (!raw) return null;
-    return [...substituteAll(raw.bass), ...substituteAll(raw.treble)];
+    return [...substituteAll(raw.bass, card), ...substituteAll(raw.treble, card)];
   }
 
   // Closed voicing on grand staff: pitches land on one clef.
@@ -959,5 +969,5 @@ function computePlaybackPitches(card) {
   const place = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
   const raw = placeChordInRange(card.spelling, card.quality, card.inversion, place.lo, place.hi);
   if (!raw) return null;
-  return substituteAll(raw);
+  return substituteAll(raw, card);
 }

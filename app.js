@@ -1003,15 +1003,37 @@ $('add-focus-btn').addEventListener('click', () => {
 // ============================================================
 // Queue building (unchanged)
 // ============================================================
+// Chord spellings that have a cleaner enharmonic equivalent already in the
+// roster — silently skipped from the deck so the standard spelling appears
+// (e.g. Db major instead of C# major). The pitch class is still drillable
+// via the other root spelling.
+const EXCLUDED_COMBOS = new Set([
+  'C#:major',      // -> Db major (C# major = 7 sharps, rare key)
+  'G#:major',      // -> Ab major (8 sharps, not a real key)
+  'Db:minor',      // -> C# minor (8 flats, not a real key)
+  'Gb:minor',      // -> F# minor (9 flats)
+  'Db:diminished', // -> C# diminished
+  'Gb:diminished', // -> F# diminished
+  'C#:augmented',  // -> Db augmented (drops G##)
+  'G#:augmented',  // -> Ab augmented (drops D##)
+  'Ab:diminished'  // -> G# diminished (drops Ebb, Cb)
+]);
+function isExcludedCombo(spelling, quality) {
+  return EXCLUDED_COMBOS.has(`${spelling}:${quality}`);
+}
+
 function buildQueue() {
   const base = [];
   for (const spelling of state.selectedSpellings)
     for (const q of state.selectedQualities)
-      for (const i of state.selectedInversions)
+      for (const i of state.selectedInversions) {
+        if (isExcludedCombo(spelling, q)) continue;
         base.push({ spelling, quality: q, inversion: i, focus: null });
+      }
 
   const queue = [...base];
   state.focusItems.forEach(f => {
+    if (isExcludedCombo(f.spelling, f.quality)) return;
     const weight = STRESS_WEIGHTS[f.stress];
     const inBase = base.find(b => b.spelling === f.spelling && b.quality === f.quality && b.inversion === f.inversion);
     const copies = inBase ? weight - 1 : weight;
@@ -1387,6 +1409,23 @@ $('end-btn').addEventListener('click', () => {
   });
 });
 $('quit-x').addEventListener('click', () => endSession(false));
+
+// Replay button: play the current card's chord on demand, even if the
+// Play sound toggle is off. Audio context is primed inside this click
+// gesture so resume() is allowed.
+$('replay-btn').addEventListener('click', async () => {
+  if (!state.session || !state.session.lastCard) return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  const card = state.session.lastCard;
+  const pitches = computePlaybackPitches(card);
+  if (!pitches) return;
+  const articulation = resolveArticulation(state.notation.articulation);
+  const direction = resolveDirection(state.notation.arpeggioDirection);
+  const bpm = state.metronome.bpm || 80;
+  const meter = state.metronome.meter || 4;
+  await playChord(pitches, { articulation, bpm, meter, direction });
+});
 
 function endSession(save = true) {
   clearInterval(timerInterval);
