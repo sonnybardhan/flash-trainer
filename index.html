@@ -584,7 +584,7 @@
   .range-open-btn:hover { border-color: var(--border-strong); }
   .range-open-chevron { color: var(--text-faint); font-size: 14px; }
 
-  .range-modal { max-width: 560px; width: calc(100vw - 32px); }
+  .range-modal { max-width: 680px; width: calc(100vw - 32px); }
   .range-modal-hint {
     font-family: var(--mono); font-size: 10px;
     color: var(--text-faint); letter-spacing: 1px;
@@ -593,19 +593,31 @@
   .range-picker-stage {
     background: var(--surface-2);
     border-radius: 8px;
-    padding: 12px;
+    padding: 18px 12px;
     overflow-x: auto;
     overflow-y: hidden;
     display: flex;
     justify-content: center;
+    min-height: 200px;
   }
   .range-picker-bounds {
     font-family: var(--mono); font-size: 13px; color: var(--text);
     letter-spacing: 2px; text-align: center; margin-top: 12px;
+    min-height: 1.4em;
+  }
+  .range-picker-bounds.error { color: var(--danger); letter-spacing: 1px; }
+  .range-picker-actions {
+    display: flex; justify-content: space-between; gap: 8px;
+    margin-top: 12px;
   }
   .range-picker-stage svg { display: block; }
   .range-picker-stage .range-hit { cursor: pointer; fill: transparent; }
-  .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.12; }
+  .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.10; }
+  .range-picker-stage .range-band { fill: var(--accent); fill-opacity: 0.12; pointer-events: none; }
+  .range-picker-stage .range-pending-band { fill: var(--accent); fill-opacity: 0.08; pointer-events: none; }
+  .range-picker-stage .range-bound-note,
+  .range-picker-stage .range-pending-note { pointer-events: none; }
+  .range-picker-stage .range-pending-note { opacity: 0.55; }
 
   .card-notation {
     margin-top: 28px;
@@ -1128,11 +1140,12 @@
 <div class="modal-backdrop" id="range-modal-backdrop">
   <div class="modal range-modal">
     <h2 class="modal-title">Range</h2>
-    <div class="range-modal-hint">Tap a note above the highlighted span to extend the high bound, or below to extend the low bound.</div>
+    <div class="range-modal-hint" id="range-modal-hint">Tap two pitches on the staff to set the range. The wider tap becomes the high bound, the narrower becomes the low.</div>
     <div class="range-picker-stage" id="range-picker-stage"></div>
     <div class="range-picker-bounds" id="range-picker-bounds">C4 – A5</div>
-    <div class="modal-actions">
-      <button class="modal-btn-secondary" id="range-modal-close">Done</button>
+    <div class="range-picker-actions">
+      <button class="modal-btn-secondary" id="range-modal-reset">Reset to default</button>
+      <button class="modal-btn-primary" id="range-modal-close">Done</button>
     </div>
   </div>
 </div>
@@ -2262,134 +2275,248 @@ function loadNotationSettings() {
 // ============================================================
 // Range picker — visual staff modal
 // ============================================================
-// Naturals shown on each clef in the picker. Includes a couple
-// ledger positions above and below the staff so the user can
-// extend beyond the lines.
-function pickerPitchesFor(hand) {
-  const range = (lo, hi) => {
-    const all = [];
-    for (let o = 2; o <= 6; o++) for (const l of ['C','D','E','F','G','A','B']) all.push({ name: `${l}${o}`, semi: pitchSemitones({letter:l, accidental:0, octave:o}) });
-    const loS = pitchSemitones(parsePitchName(lo));
-    const hiS = pitchSemitones(parsePitchName(hi));
-    return all.filter(p => p.semi >= loS && p.semi <= hiS).map(p => p.name);
-  };
-  if (hand === 'left')  return { bass:   range('C2', 'E4'), treble: [] };
-  if (hand === 'both')  return { bass:   range('G2', 'B3'), treble: range('C4', 'C6') };
-  return                      { bass:   [],                 treble: range('G3', 'C6') };
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const RANGE_MIN_SEMITONES = 12; // require at least an octave between bounds
+const DIATONIC_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
+
+// Picker visible range per hand: a couple ledger positions above & below the
+// default staff so users can extend without exploding the size.
+function pickerVisibleFor(hand) {
+  if (hand === 'left')  return { trebleRange: null,                   bassRange: ['C2', 'E4'] };
+  if (hand === 'both')  return { trebleRange: ['C4', 'C6'],           bassRange: ['C2', 'B3'] };
+  return                       { trebleRange: ['G3', 'C6'],           bassRange: null };
+}
+
+function naturalsInRange(lo, hi) {
+  const out = [];
+  const loS = pitchSemitones(parsePitchName(lo));
+  const hiS = pitchSemitones(parsePitchName(hi));
+  for (let o = 2; o <= 6; o++) {
+    for (const l of ['C','D','E','F','G','A','B']) {
+      const s = pitchSemitones({letter:l, accidental:0, octave:o});
+      if (s >= loS && s <= hiS) out.push(`${l}${o}`);
+    }
+  }
+  return out;
+}
+
+// Diatonic distance from a clef's bottom staff line. Half-line = diatonic step.
+// Treble bottom line = E4, Bass bottom line = G2.
+function pitchToLineFromTop(pitch, clef) {
+  const p = parsePitchName(pitch);
+  const diaP = p.octave * 7 + DIATONIC_INDEX[p.letter];
+  const anchor = clef === 'treble' ? { letter: 'E', octave: 4 } : { letter: 'G', octave: 2 };
+  const diaA = anchor.octave * 7 + DIATONIC_INDEX[anchor.letter];
+  // Half-line steps from bottom staff line. Bottom line = VexFlow line index 4.
+  const halfLinesFromBottom = diaP - diaA;
+  return 4 - halfLinesFromBottom * 0.5;
+}
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, String(v));
+  return el;
+}
+
+// Draw a notehead (oval) at (cx, cy) plus any ledger lines required to
+// position it relative to the given stave.
+function drawNotehead(svg, cx, cy, stave, color, className, opacity) {
+  const topY = stave.getYForLine(0);
+  const bottomY = stave.getYForLine(4);
+  const spacing = (bottomY - topY) / 4; // px per staff line
+  // Ledger lines above
+  if (cy < topY - spacing * 0.25) {
+    let lineY = topY - spacing;
+    while (lineY >= cy - spacing * 0.25) {
+      svg.appendChild(svgEl('line', {
+        x1: cx - 9, x2: cx + 9, y1: lineY, y2: lineY,
+        stroke: color, 'stroke-width': 1, class: className + '-ledger'
+      }));
+      lineY -= spacing;
+    }
+  } else if (cy > bottomY + spacing * 0.25) {
+    let lineY = bottomY + spacing;
+    while (lineY <= cy + spacing * 0.25) {
+      svg.appendChild(svgEl('line', {
+        x1: cx - 9, x2: cx + 9, y1: lineY, y2: lineY,
+        stroke: color, 'stroke-width': 1, class: className + '-ledger'
+      }));
+      lineY += spacing;
+    }
+  }
+  // Notehead — slightly rotated whole-note oval.
+  const note = svgEl('ellipse', {
+    cx, cy, rx: 6.5, ry: 4.5, fill: color, class: className,
+    transform: `rotate(-18 ${cx} ${cy})`
+  });
+  if (opacity != null) note.setAttribute('opacity', String(opacity));
+  svg.appendChild(note);
 }
 
 function updateRangeCurrentLabel() {
   const label = `${state.notation.rangeLow} – ${state.notation.rangeHigh}`;
   $('range-current-label').textContent = label;
-  $('range-picker-bounds').textContent = label;
 }
+
+let pickerFirstTap = null;
+let pickerError = null;
 
 function renderRangePicker() {
   const stage = $('range-picker-stage');
   stage.replaceChildren();
   const ns = state.notation;
-  const { bass, treble } = pickerPitchesFor(ns.hand);
+  const { trebleRange, bassRange } = pickerVisibleFor(ns.hand);
   const VF = Vex.Flow;
 
-  // Estimate dimensions. Each whole note ~ 18px wide.
-  const maxCount = Math.max(bass.length, treble.length);
-  const noteW = 22;
-  const stavePadL = 60;  // clef + a touch of margin
-  const stavePadR = 14;
-  const width = Math.max(360, stavePadL + stavePadR + maxCount * noteW);
-  const isGrand = bass.length > 0 && treble.length > 0;
-  const height = isGrand ? 220 : 140;
+  const width = 580;
+  const isGrand = trebleRange && bassRange;
+  const height = isGrand ? 240 : 150;
 
   const renderer = new VF.Renderer(stage, VF.Renderer.Backends.SVG);
   renderer.resize(width, height);
   const ctx = renderer.getContext();
   const color = themeColor();
+  const accent = (getComputedStyle(document.body).getPropertyValue('--accent') || '').trim() || color;
   ctx.setFillStyle(color);
   ctx.setStrokeStyle(color);
 
-  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
-  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
-
-  const drawClef = (clef, pitches, y) => {
-    if (!pitches.length) return null;
-    const stave = new VF.Stave(8, y, width - 16);
-    stave.addClef(clef);
-    stave.setContext(ctx).draw();
-    const notes = pitches.map(p => new VF.StaveNote({ clef, keys: [p.toLowerCase().replace(/(\d)/, '/$1')], duration: 'w' }));
-    const voice = new VF.Voice({ num_beats: pitches.length * 4, beat_value: 4 });
-    voice.addTickables(notes);
-    new VF.Formatter().joinVoices([voice]).format([voice], width - stavePadL - stavePadR);
-    voice.draw(ctx, stave);
-    return { stave, notes, pitches };
-  };
-
-  let trebleSet = null, bassSet = null;
+  let trebleStave = null, bassStave = null;
+  if (trebleRange) {
+    trebleStave = new VF.Stave(12, isGrand ? 14 : 24, width - 24);
+    trebleStave.addClef('treble').setContext(ctx).draw();
+  }
+  if (bassRange) {
+    bassStave = new VF.Stave(12, isGrand ? 116 : 24, width - 24);
+    bassStave.addClef('bass').setContext(ctx).draw();
+  }
   if (isGrand) {
-    trebleSet = drawClef('treble', treble, 8);
-    bassSet   = drawClef('bass',   bass, 100);
-    new VF.StaveConnector(trebleSet.stave, bassSet.stave).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
-    new VF.StaveConnector(trebleSet.stave, bassSet.stave).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
-  } else if (treble.length) {
-    trebleSet = drawClef('treble', treble, 18);
-  } else {
-    bassSet = drawClef('bass', bass, 18);
+    new VF.StaveConnector(trebleStave, bassStave).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
+    new VF.StaveConnector(trebleStave, bassStave).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
   }
 
-  // Post-process: opacity by in-range, add click hitboxes on top.
   const svg = stage.querySelector('svg');
-  const wireSet = (set) => {
-    if (!set) return;
-    set.notes.forEach((note, i) => {
-      const pitchName = set.pitches[i];
-      const semi = pitchSemitones(parsePitchName(pitchName));
-      const inRange = semi >= loSemi && semi <= hiSemi;
-      const isBound = pitchName === ns.rangeLow || pitchName === ns.rangeHigh;
-      const groupId = note.attrs && note.attrs.id;
-      if (groupId) {
-        const g = svg.querySelector(`[id="${groupId}"]`);
-        if (g) g.setAttribute('opacity', isBound ? '1' : (inRange ? '0.85' : '0.18'));
-      }
-      // Click hitbox
-      const bbox = note.getBoundingBox && note.getBoundingBox();
-      const x = note.getAbsoluteX ? note.getAbsoluteX() : (bbox ? bbox.x : 0);
-      const ys = note.getYs ? note.getYs() : [bbox ? bbox.y : 0];
-      const y = ys[0];
-      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      hit.setAttribute('class', 'range-hit');
-      hit.setAttribute('x', String(x - noteW / 2));
-      hit.setAttribute('y', String(y - 16));
-      hit.setAttribute('width', String(noteW));
-      hit.setAttribute('height', '32');
-      hit.style.cursor = 'pointer';
-      hit.addEventListener('click', () => updateRangeFromTap(pitchName));
-      svg.appendChild(hit);
-    });
+
+  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
+  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
+  const pendingSemi = pickerFirstTap ? pitchSemitones(parsePitchName(pickerFirstTap)) : null;
+
+  // Compute Y for each pitch on the appropriate stave.
+  function pitchY(pitch) {
+    const semi = pitchSemitones(parsePitchName(pitch));
+    if (isGrand) {
+      // Middle C threshold splits the staves; C4 itself uses the treble stave's first ledger below.
+      const useTreble = semi >= pitchSemitones(parsePitchName('C4'));
+      const stave = useTreble ? trebleStave : bassStave;
+      const clef = useTreble ? 'treble' : 'bass';
+      return { y: stave.getYForLine(pitchToLineFromTop(pitch, clef)), stave };
+    }
+    if (trebleStave) return { y: trebleStave.getYForLine(pitchToLineFromTop(pitch, 'treble')), stave: trebleStave };
+    return { y: bassStave.getYForLine(pitchToLineFromTop(pitch, 'bass')), stave: bassStave };
+  }
+
+  // Range highlight bands (current bounds + pending tap if any).
+  function drawBand(lo, hi, className) {
+    const loInfo = pitchY(lo);
+    const hiInfo = pitchY(hi);
+    // Need an x range — full inside of the staves below cleft.
+    const xStart = 60;
+    const xEnd = width - 18;
+    // Band can span both staves on a grand staff; use bounding y across both info.
+    const minY = Math.min(loInfo.y, hiInfo.y) - 7;
+    const maxY = Math.max(loInfo.y, hiInfo.y) + 7;
+    svg.appendChild(svgEl('rect', {
+      x: xStart, y: minY, width: xEnd - xStart, height: maxY - minY, class: className
+    }));
+  }
+  if (!pickerError) drawBand(ns.rangeLow, ns.rangeHigh, 'range-band');
+
+  // Bound noteheads.
+  const drawBoundAt = (pitch, x, className) => {
+    const info = pitchY(pitch);
+    drawNotehead(svg, x, info.y, info.stave, color, className);
   };
-  wireSet(trebleSet);
-  wireSet(bassSet);
+  drawBoundAt(ns.rangeLow, 120, 'range-bound-note');
+  drawBoundAt(ns.rangeHigh, width - 80, 'range-bound-note');
+
+  // Pending tap notehead.
+  if (pickerFirstTap) {
+    const info = pitchY(pickerFirstTap);
+    drawNotehead(svg, width / 2, info.y, info.stave, accent, 'range-pending-note', 0.85);
+  }
+
+  // Hit zones — one per pitch on each visible stave. Cover the full
+  // stave width and a half-line of vertical room around the pitch.
+  function addHits(pitches, stave, clef) {
+    if (!pitches) return;
+    const spacing = (stave.getYForLine(4) - stave.getYForLine(0)) / 4;
+    const hitH = spacing * 0.6;
+    for (const pitch of pitches) {
+      const y = stave.getYForLine(pitchToLineFromTop(pitch, clef));
+      const rect = svgEl('rect', {
+        x: 60, y: y - hitH / 2, width: width - 78, height: hitH,
+        class: 'range-hit'
+      });
+      rect.addEventListener('click', () => handleRangeTap(pitch));
+      svg.appendChild(rect);
+    }
+  }
+  if (trebleRange) addHits(naturalsInRange(trebleRange[0], trebleRange[1]), trebleStave, 'treble');
+  if (bassRange)   addHits(naturalsInRange(bassRange[0], bassRange[1]),     bassStave,   'bass');
+
+  // Status line.
+  const bounds = $('range-picker-bounds');
+  if (pickerError) {
+    bounds.textContent = pickerError;
+    bounds.classList.add('error');
+  } else if (pickerFirstTap) {
+    bounds.textContent = `${pickerFirstTap} — tap another pitch to set range`;
+    bounds.classList.remove('error');
+  } else {
+    bounds.textContent = `${ns.rangeLow} – ${ns.rangeHigh}`;
+    bounds.classList.remove('error');
+  }
 }
 
-function updateRangeFromTap(pitch) {
-  const ns = state.notation;
-  const tappedSemi = pitchSemitones(parsePitchName(pitch));
-  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
-  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
-  if (tappedSemi === loSemi || tappedSemi === hiSemi) return;
+function handleRangeTap(pitch) {
+  pickerError = null;
+  if (!pickerFirstTap) {
+    pickerFirstTap = pitch;
+    renderRangePicker();
+    return;
+  }
+  const first = pickerFirstTap;
+  const second = pitch;
+  if (first === second) {
+    pickerError = `Pick two different pitches`;
+    renderRangePicker();
+    return;
+  }
+  const a = pitchSemitones(parsePitchName(first));
+  const b = pitchSemitones(parsePitchName(second));
+  if (Math.abs(a - b) < RANGE_MIN_SEMITONES) {
+    pickerError = `Range too narrow — needs at least an octave`;
+    pickerFirstTap = second;
+    renderRangePicker();
+    return;
+  }
+  const low = a < b ? first : second;
+  const high = a < b ? second : first;
+  state.notation.rangeLow = low;
+  state.notation.rangeHigh = high;
+  pickerFirstTap = null;
+  updateRangeCurrentLabel();
+  renderRangePicker();
+  rerenderCurrentCard();
+  saveNotationSettings();
+  markCustomIfActive();
+}
 
-  let newLow = ns.rangeLow, newHigh = ns.rangeHigh;
-  if (tappedSemi > hiSemi) newHigh = pitch;
-  else if (tappedSemi < loSemi) newLow = pitch;
-  else {
-    const mid = (loSemi + hiSemi) / 2;
-    if (tappedSemi >= mid) newHigh = pitch;
-    else newLow = pitch;
-  }
-  // Guard against inverted bounds.
-  if (pitchSemitones(parsePitchName(newLow)) > pitchSemitones(parsePitchName(newHigh))) {
-    [newLow, newHigh] = [newHigh, newLow];
-  }
-  ns.rangeLow = newLow;
-  ns.rangeHigh = newHigh;
+function resetRangeToDefault() {
+  const d = defaultRangeForHand(state.notation.hand);
+  state.notation.rangeLow = d.low;
+  state.notation.rangeHigh = d.high;
+  pickerFirstTap = null;
+  pickerError = null;
   updateRangeCurrentLabel();
   renderRangePicker();
   rerenderCurrentCard();
@@ -2398,6 +2525,8 @@ function updateRangeFromTap(pitch) {
 }
 
 function openRangeModal() {
+  pickerFirstTap = null;
+  pickerError = null;
   updateRangeCurrentLabel();
   renderRangePicker();
   $('range-modal-backdrop').classList.add('active');
@@ -2567,6 +2696,7 @@ $('difficulty-segment').addEventListener('click', (e) => {
 });
 $('range-open-btn').addEventListener('click', openRangeModal);
 $('range-modal-close').addEventListener('click', closeRangeModal);
+$('range-modal-reset').addEventListener('click', resetRangeToDefault);
 $('range-modal-backdrop').addEventListener('click', (e) => {
   if (e.target.id === 'range-modal-backdrop') closeRangeModal();
 });
