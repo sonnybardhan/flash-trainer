@@ -546,6 +546,24 @@
     letter-spacing: 2px; text-transform: uppercase;
   }
   .card-focus-badge.empty { display: none; }
+
+  .card-notation {
+    margin-top: 28px;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 140px;
+  }
+  .card-notation svg { display: block; }
+  .card-notation .notation-skip {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
   .badge-low { background: var(--badge-low-bg); color: var(--badge-low-fg); border: 1px solid var(--badge-low-bd); }
   .badge-medium { background: var(--badge-med-bg); color: var(--badge-med-fg); border: 1px solid var(--badge-med-bd); }
   .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
@@ -900,6 +918,7 @@
     <div class="card-quality" id="card-quality">major</div>
     <div class="card-inversion" id="card-inversion">root position</div>
     <div class="card-focus-badge empty" id="card-focus-badge"></div>
+    <div class="card-notation" id="card-notation"></div>
   </div>
   <div class="flash-footer">
     <button class="btn-pause" id="pause-btn">Pause</button>
@@ -928,6 +947,7 @@
   </div>
 </div>
 
+<script src="vexflow.js"></script>
 <script>
 // ============================================================
 // Data — spelling roster
@@ -972,7 +992,22 @@ const state = {
   metronome: { enabled: false, bpm: 80, meter: 4, accent: true },
   steppers: { count: 50, time: 10, seconds: 4, beats: 4, bars: 1, bpm: 80 },
   theme: 'dark',
-  session: null
+  session: null,
+  // Notation Mode settings (§12 defaults)
+  notation: {
+    format: 'notation',          // text | notation | both
+    hand: 'right',               // right | left | both
+    voicing: 'closed',           // closed | open | mixed
+    doubleRootInBass: false,
+    articulation: 'block',       // block | arpeggio | mixed
+    arpeggioDirection: 'up',     // up | down | mixed
+    accidentals: 'onNotation',   // keySig | onNotation
+    rangeLow: 'C4',
+    rangeHigh: 'A5',
+    showName: 'tapToReveal',     // off | afterDelay | tapToReveal | always
+    labelStyle: 'plain',         // plain | slash | figured
+    unconventionalSpellings: false
+  }
 };
 
 // ============================================================
@@ -995,6 +1030,164 @@ function formatSpellingDisplay(id) {
 function formatInversion(i) {
   if (i === 'root') return 'root';
   return i + ' inv';
+}
+
+// ============================================================
+// Notation engine — pitch math
+// ============================================================
+const LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+const LETTER_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+function parseSpelling(id) {
+  let letter = id[0];
+  let acc = 0;
+  for (let i = 1; i < id.length; i++) {
+    if (id[i] === '#') acc++;
+    else if (id[i] === 'b') acc--;
+  }
+  return { letter, accidental: acc };
+}
+
+function parsePitchName(s) {
+  let letter = s[0];
+  let i = 1;
+  let acc = 0;
+  while (i < s.length && (s[i] === '#' || s[i] === 'b')) {
+    acc += s[i] === '#' ? 1 : -1;
+    i++;
+  }
+  return { letter, accidental: acc, octave: parseInt(s.slice(i), 10) };
+}
+
+function pitchSemitones(p) {
+  return p.octave * 12 + LETTER_SEMI[p.letter] + p.accidental;
+}
+
+function chordTones(spelling, quality) {
+  const root = parseSpelling(spelling);
+  const rootLetterIdx = LETTERS.indexOf(root.letter);
+  const rootSt = LETTER_SEMI[root.letter] + root.accidental;
+
+  // third: letter+2, quality of third depends on chord quality
+  const thirdLetter = LETTERS[(rootLetterIdx + 2) % 7];
+  const thirdInterval = (quality === 'major' || quality === 'augmented') ? 4 : 3;
+  const thirdTargetMod = ((rootSt + thirdInterval) % 12 + 12) % 12;
+  let thirdAcc = thirdTargetMod - LETTER_SEMI[thirdLetter];
+  if (thirdAcc < -6) thirdAcc += 12;
+  if (thirdAcc > 6) thirdAcc -= 12;
+
+  // fifth: letter+4, quality of fifth depends on chord quality
+  const fifthLetter = LETTERS[(rootLetterIdx + 4) % 7];
+  let fifthInterval = 7;
+  if (quality === 'diminished') fifthInterval = 6;
+  else if (quality === 'augmented') fifthInterval = 8;
+  const fifthTargetMod = ((rootSt + fifthInterval) % 12 + 12) % 12;
+  let fifthAcc = fifthTargetMod - LETTER_SEMI[fifthLetter];
+  if (fifthAcc < -6) fifthAcc += 12;
+  if (fifthAcc > 6) fifthAcc -= 12;
+
+  return [
+    { letter: root.letter, accidental: root.accidental, role: 'root' },
+    { letter: thirdLetter, accidental: thirdAcc, role: 'third' },
+    { letter: fifthLetter, accidental: fifthAcc, role: 'fifth' }
+  ];
+}
+
+function buildClosedVoicing(spelling, quality, inversion, baseOctave) {
+  const tones = chordTones(spelling, quality);
+  let order;
+  if (inversion === 'root') order = [tones[0], tones[1], tones[2]];
+  else if (inversion === '1st') order = [tones[1], tones[2], tones[0]];
+  else order = [tones[2], tones[0], tones[1]];
+
+  const out = [];
+  let prevSemi = -Infinity;
+  let octave = baseOctave;
+  for (const t of order) {
+    let candidate = pitchSemitones({ ...t, octave });
+    while (candidate <= prevSemi) {
+      octave++;
+      candidate = pitchSemitones({ ...t, octave });
+    }
+    out.push({ ...t, octave });
+    prevSemi = candidate;
+  }
+  return out;
+}
+
+function placeChordInRange(spelling, quality, inversion, rangeLow, rangeHigh) {
+  const lowSemi = pitchSemitones(parsePitchName(rangeLow));
+  const highSemi = pitchSemitones(parsePitchName(rangeHigh));
+  for (let oct = 1; oct <= 7; oct++) {
+    const pitches = buildClosedVoicing(spelling, quality, inversion, oct);
+    const loSemi = pitchSemitones(pitches[0]);
+    const hiSemi = pitchSemitones(pitches[pitches.length - 1]);
+    if (loSemi >= lowSemi && hiSemi <= highSemi) return pitches;
+  }
+  return null;
+}
+
+function accidentalString(acc) {
+  if (acc === 0) return null;
+  if (acc > 0) return '#'.repeat(acc);
+  return 'b'.repeat(-acc);
+}
+
+function pitchToVexKey(p) {
+  const accStr = accidentalString(p.accidental) || '';
+  return `${p.letter.toLowerCase()}${accStr}/${p.octave}`;
+}
+
+// ============================================================
+// Notation engine — rendering
+// ============================================================
+function pickStaveClef(hand) {
+  if (hand === 'left') return 'bass';
+  return 'treble';
+}
+
+function themeColor() {
+  return getComputedStyle(document.body).getPropertyValue('--text').trim() || '#000';
+}
+
+function renderNotation(card, container) {
+  container.replaceChildren();
+  const ns = state.notation;
+  const clef = pickStaveClef(ns.hand);
+
+  const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
+  if (!pitches) {
+    const skip = document.createElement('div');
+    skip.className = 'notation-skip';
+    skip.textContent = 'chord out of range';
+    container.appendChild(skip);
+    return;
+  }
+
+  const VF = Vex.Flow;
+  const width = 280, height = 140;
+  const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const ctx = renderer.getContext();
+  const color = themeColor();
+  ctx.setFillStyle(color);
+  ctx.setStrokeStyle(color);
+
+  const stave = new VF.Stave(8, 18, width - 16);
+  stave.addClef(clef);
+  stave.setContext(ctx).draw();
+
+  const keys = pitches.map(pitchToVexKey);
+  const note = new VF.StaveNote({ clef, keys, duration: 'w', auto_stem: true });
+  pitches.forEach((p, i) => {
+    const accStr = accidentalString(p.accidental);
+    if (accStr) note.addModifier(new VF.Accidental(accStr), i);
+  });
+
+  const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+  voice.addTickables([note]);
+  new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
+  voice.draw(ctx, stave);
 }
 
 // ============================================================
@@ -1331,6 +1524,9 @@ function applyTheme(theme) {
   document.body.classList.toggle('theme-light', theme === 'light');
   document.body.classList.toggle('theme-dark', theme === 'dark');
   $('theme-toggle').textContent = theme === 'dark' ? '☼' : '☾';
+  if (state.session && state.session.lastCard) {
+    renderNotation(state.session.lastCard, $('card-notation'));
+  }
 }
 $('theme-toggle').addEventListener('click', () => {
   applyTheme(state.theme === 'dark' ? 'light' : 'dark');
@@ -1485,6 +1681,7 @@ function renderCard(card) {
   $('stat-progress').textContent = state.session.mode === 'count'
     ? `${state.session.cardCount} / ${state.session.target}`
     : `${state.session.cardCount}`;
+  renderNotation(card, $('card-notation'));
   const fc = $('flash-card');
   fc.classList.remove('transition');
   void fc.offsetWidth;

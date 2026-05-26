@@ -6,7 +6,7 @@ A single-file web app for drilling triads on your instrument. Pick the roots, qu
 
 ## Features
 
-- Configurable card pool — any combination of 12 roots × qualities (maj/min/dim/aug/sus) × inversions
+- Configurable card pool — any combination of 15 root spellings × qualities (maj/min/dim/aug) × inversions
 - Session modes: fixed rep count or fixed minutes
 - Auto-advance by tap, seconds, beats, or bars
 - Built-in metronome with adjustable tempo, time signature, and accent
