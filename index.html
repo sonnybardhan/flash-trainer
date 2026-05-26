@@ -584,7 +584,7 @@
   .range-open-btn:hover { border-color: var(--border-strong); }
   .range-open-chevron { color: var(--text-faint); font-size: 14px; }
 
-  .modal.range-modal { max-width: 880px; width: calc(100vw - 32px); }
+  .modal.range-modal { max-width: 600px; width: calc(100vw - 32px); }
   .range-modal-hint {
     font-family: var(--mono); font-size: 10px;
     color: var(--text-faint); letter-spacing: 1px;
@@ -616,7 +616,7 @@
   }
   .range-picker-actions .chip { padding: 10px 16px; font-size: 13px; }
   .range-picker-stage svg { display: block; }
-  .range-picker-stage .range-hit { cursor: pointer; fill: transparent; }
+  .range-picker-stage .range-hit { cursor: pointer; fill: none; pointer-events: all; }
   .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.10; }
   .range-picker-stage .range-band { fill: var(--accent); fill-opacity: 0.12; pointer-events: none; }
   .range-picker-stage .range-bound-note,
@@ -2374,7 +2374,7 @@ function renderRangePicker() {
   const VF = Vex.Flow;
 
   const spacing = 16; // staff line spacing in px (bigger than the default 10)
-  const width = 760;
+  const width = 420;
   const isGrand = trebleRange && bassRange;
   // Each stave takes 4 * spacing for the lines, plus padding for ledgers above/below.
   const ledgerPad = spacing * 4; // room for ~4 ledger positions on each side
@@ -2459,7 +2459,8 @@ function renderRangePicker() {
       const rect = svgEl('rect', {
         x: xStart - 20, y: y - hitH / 2,
         width: xEnd - xStart + 40, height: hitH,
-        class: 'range-hit'
+        class: 'range-hit',
+        fill: 'none', stroke: 'none', 'pointer-events': 'all'
       });
       rect.addEventListener('click', () => handleRangeTap(pitch));
       rect.addEventListener('mouseenter', () => { $('range-picker-hover').textContent = pitch; });
