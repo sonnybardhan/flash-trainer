@@ -1312,6 +1312,7 @@ function endSession(save = true) {
   clearInterval(timerInterval);
   clearInterval(advanceInterval);
   stopMetronome();
+  if (typeof stopAllPianoNotes === 'function') stopAllPianoNotes();
   if (!state.session) return;
 
   if (save) {

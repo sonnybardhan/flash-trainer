@@ -41,6 +41,7 @@ let _activePresetData = null;      // the loaded preset object (for queueWaveTab
 let _activePresetId = null;        // which preset id is currently loaded
 let _playerScriptPromise = null;
 const _presetScriptPromises = {};  // id -> Promise<presetObject>
+let _activeEnvelopes = [];         // envelopes from the most recent chord (for cutoff)
 
 function _loadPlayerScript() {
   if (_playerScriptPromise) return _playerScriptPromise;
@@ -180,12 +181,28 @@ function pitchToMidi(p) {
 // Schedule a chord on the audio context.
 // pitches: array of {letter, accidental, octave} (low-to-high)
 // opts: { articulation: 'block'|'arpeggio', bpm, meter, direction: 'up'|'down' }
+// Fade out any notes scheduled by the previous chord so they don't ring into
+// the next card. envelope.cancel() ramps the envelope gain to ~0 over 0.1 s.
+function _stopActiveNotes() {
+  for (const env of _activeEnvelopes) {
+    if (env && typeof env.cancel === 'function') {
+      try { env.cancel(); } catch (e) { /* envelope already detached */ }
+    }
+  }
+  _activeEnvelopes = [];
+}
+// Public alias for app.js — call this on session end / quit / pause if needed.
+function stopAllPianoNotes() { _stopActiveNotes(); }
+
 async function playChord(pitches, opts) {
   if (!pitches || !pitches.length) return;
   const presetId = (state.notation && state.notation.pianoPreset) || DEFAULT_PRESET_ID;
   try { await _ensurePreset(presetId); }
   catch (e) { console.warn('[sound] preset load failed', e); return; }
   if (!audioCtx || !_activePresetData) return;
+
+  // Kill the previous card's notes before starting the new one.
+  _stopActiveNotes();
 
   const bpm = Math.max(30, opts.bpm || 80);
   const meter = Math.max(1, opts.meter || 4);
@@ -197,8 +214,9 @@ async function playChord(pitches, opts) {
   if (articulation === 'block') {
     const durationSec = beatSec * meter;
     for (const p of pitches) {
-      _player.queueWaveTable(audioCtx, target, _activePresetData, t0,
-                              pitchToMidi(p), durationSec);
+      const env = _player.queueWaveTable(audioCtx, target, _activePresetData, t0,
+                                          pitchToMidi(p), durationSec);
+      if (env) _activeEnvelopes.push(env);
     }
     return;
   }
@@ -206,8 +224,9 @@ async function playChord(pitches, opts) {
   const ordered = opts.direction === 'down' ? [...pitches].reverse() : pitches;
   const noteDur = beatSec * 0.9;
   ordered.forEach((p, i) => {
-    _player.queueWaveTable(audioCtx, target, _activePresetData,
-                            t0 + i * beatSec, pitchToMidi(p), noteDur);
+    const env = _player.queueWaveTable(audioCtx, target, _activePresetData,
+                                        t0 + i * beatSec, pitchToMidi(p), noteDur);
+    if (env) _activeEnvelopes.push(env);
   });
 }
 
