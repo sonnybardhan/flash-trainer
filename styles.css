@@ -1,21 +1,22 @@
   /* ================= THEMES ================= */
   :root, .theme-dark {
-    --bg: #0e0c0a;
-    --surface: #1a1714;
-    --surface-2: #221d18;
-    --border: #2a2520;
-    --border-strong: #3a342d;
-    --text: #f0ebe3;
-    --text-dim: #8a8278;
-    --text-faint: #5a5650;
-    --accent: #d4a056;
-    --accent-text: #1a1410;
-    --danger: #c95d4b;
-    --bg-gradient-1: rgba(212, 160, 86, 0.04);
-    --bg-gradient-2: rgba(212, 160, 86, 0.02);
-    --backdrop: rgba(14, 12, 10, 0.97);
-    --shadow: 0 2px 8px rgba(212, 160, 86, 0.15);
-    --modal-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    /* Nordic Slate: cool muted blue-grey with ice-blue accent. */
+    --bg: #1c1f26;
+    --surface: #232730;
+    --surface-2: #2b303b;
+    --border: #353b48;
+    --border-strong: #4b5263;
+    --text: #e5e9f0;
+    --text-dim: #8a93a3;
+    --text-faint: #5d6678;
+    --accent: #88c0d0;
+    --accent-text: #1c1f26;
+    --danger: #bf616a;
+    --bg-gradient-1: rgba(136, 192, 208, 0.04);
+    --bg-gradient-2: rgba(136, 192, 208, 0.015);
+    --backdrop: rgba(28, 31, 38, 0.97);
+    --shadow: 0 2px 8px rgba(136, 192, 208, 0.15);
+    --modal-shadow: 0 20px 60px rgba(0,0,0,0.55);
     --switch-knob-off: var(--text-dim);
     --badge-low-bg: #1e3a5240;
     --badge-low-fg: #93c5fd;
