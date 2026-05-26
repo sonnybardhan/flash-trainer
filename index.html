@@ -893,12 +893,12 @@
           <div class="segment active" data-format="notation">Notation</div>
         </div>
       </div>
-      <div class="form-row" id="hand-row">
-        <label>Hand</label>
-        <div class="segment-control" id="hand-segment">
-          <div class="segment active" data-hand="right">Right</div>
-          <div class="segment" data-hand="left">Left</div>
-          <div class="segment" data-hand="both">Both</div>
+      <div class="form-row" id="clef-row">
+        <label>Clef</label>
+        <div class="segment-control" id="clef-segment">
+          <div class="segment active" data-clef="treble">Treble</div>
+          <div class="segment" data-clef="bass">Bass</div>
+          <div class="segment" data-clef="both">Both</div>
         </div>
       </div>
       <div class="form-row" id="voicing-row" style="display:none;">
@@ -1204,7 +1204,7 @@ const state = {
   // Notation Mode settings (§12 defaults)
   notation: {
     format: 'notation',          // text | notation | both
-    hand: 'right',               // right | left | both
+    clef: 'treble',              // treble | bass | both
     voicing: 'closed',           // closed | open | mixed
     doubleRootInBass: false,
     articulation: 'block',       // block | arpeggio | mixed
@@ -1483,9 +1483,9 @@ function themeColor() {
   return getComputedStyle(document.body).getPropertyValue('--text').trim() || '#000';
 }
 
-function defaultRangeForHand(hand) {
-  if (hand === 'left') return { low: 'E2', high: 'C4' };
-  if (hand === 'both') return { low: 'E2', high: 'A5' };
+function defaultRangeForClef(clef) {
+  if (clef === 'bass') return { low: 'E2', high: 'C4' };
+  if (clef === 'both') return { low: 'E2', high: 'A5' };
   return { low: 'C4', high: 'A5' };
 }
 
@@ -1501,8 +1501,8 @@ function narrowRangeForClef(lo, hi, clef) {
 }
 
 // Stable per-card clef pick for Both+Closed mode (avoids flipping on re-render).
-function resolveChordClef(card, hand, voicing) {
-  if (hand !== 'both' || voicing !== 'closed') return null;
+function resolveChordClef(card, clef, voicing) {
+  if (clef !== 'both' || voicing !== 'closed') return null;
   if (!('chordClef' in card)) {
     card.chordClef = Math.random() < 0.5 ? 'treble' : 'bass';
   }
@@ -1511,8 +1511,8 @@ function resolveChordClef(card, hand, voicing) {
 
 // Stable per-card voicing resolution. In Both+Mixed, picks closed or open once.
 // Anything other than Both is forced to Closed (Open requires both staves, §3.2).
-function resolveVoicing(card, hand, voicing) {
-  if (hand !== 'both') return 'closed';
+function resolveVoicing(card, clef, voicing) {
+  if (clef !== 'both') return 'closed';
   if (voicing !== 'mixed') return voicing;
   if (!('voicingResolved' in card)) {
     card.voicingResolved = Math.random() < 0.5 ? 'closed' : 'open';
@@ -1592,7 +1592,7 @@ function buildGrandStaff(VF, ctx, width, keyName) {
 
 function renderClosedGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns) {
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
-  const chordClef = resolveChordClef(card, ns.hand, 'closed') || 'treble';
+  const chordClef = resolveChordClef(card, ns.clef, 'closed') || 'treble';
   const placeRange = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
   const raw = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
   if (!raw) { renderSkip(container); return; }
@@ -1697,15 +1697,15 @@ function renderNotation(card, container) {
     });
   };
 
-  const effectiveVoicing = resolveVoicing(card, ns.hand, ns.voicing);
-  const isGrand = ns.hand === 'both';
+  const effectiveVoicing = resolveVoicing(card, ns.clef, ns.voicing);
+  const isGrand = ns.clef === 'both';
 
   const width = articulation === 'arpeggio' ? 340 : 300;
   const height = isGrand ? 220 : 140;
   const ctx = setupRenderer(VF, container, width, height);
 
   if (!isGrand) {
-    const clef = ns.hand === 'left' ? 'bass' : 'treble';
+    const clef = ns.clef === 'bass' ? 'bass' : 'treble';
     const raw = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
     if (!raw) { renderSkip(container); return; }
     const pitches = substituteAll(raw);
@@ -2165,9 +2165,9 @@ function setActiveSegment(segmentId, attr, value) {
 function updateNotationRowVisibility() {
   const ns = state.notation;
   const isNotation = ns.format === 'notation';
-  $('hand-row').style.display = isNotation ? 'flex' : 'none';
+  $('clef-row').style.display = isNotation ? 'flex' : 'none';
   // Voicing only meaningful in Both (single-staff modes force Closed, §3.2).
-  $('voicing-row').style.display = isNotation && ns.hand === 'both' ? 'flex' : 'none';
+  $('voicing-row').style.display = isNotation && ns.clef === 'both' ? 'flex' : 'none';
   $('articulation-row').style.display = isNotation ? 'flex' : 'none';
   const showDir = isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
@@ -2176,7 +2176,7 @@ function updateNotationRowVisibility() {
   $('range-row').style.display = isNotation ? 'flex' : 'none';
   $('show-name-row').style.display = isNotation ? 'flex' : 'none';
   // Double root only meaningful in Both + Closed.
-  const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
+  const showDoubleRoot = isNotation && ns.clef === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
@@ -2190,7 +2190,7 @@ const DIFFICULTY_PRESETS = {
     roots: ['C','D','E','F','G','A','B'],
     qualities: ['major'],
     inversions: ['root'],
-    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+    notation: { voicing: 'closed', articulation: 'block', clef: 'treble',
                 accidentals: 'keySig', rangeLow: 'C4', rangeHigh: 'G5',
                 showName: 'always', unconventionalSpellings: false }
   },
@@ -2198,7 +2198,7 @@ const DIFFICULTY_PRESETS = {
     roots: ['C','D','E','F','G','A','B','C#','F#'],
     qualities: ['major','minor'],
     inversions: ['root','1st'],
-    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+    notation: { voicing: 'closed', articulation: 'block', clef: 'treble',
                 accidentals: 'keySig', rangeLow: 'C4', rangeHigh: 'A5',
                 showName: 'always', unconventionalSpellings: false }
   },
@@ -2206,7 +2206,7 @@ const DIFFICULTY_PRESETS = {
     roots: ['C','D','E','F','G','A','B','C#','F#','G#'],
     qualities: ['major','minor','diminished'],
     inversions: ['root','1st','2nd'],
-    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+    notation: { voicing: 'closed', articulation: 'block', clef: 'treble',
                 accidentals: 'onNotation', rangeLow: 'C4', rangeHigh: 'A5',
                 showName: 'tapToReveal', unconventionalSpellings: false }
   },
@@ -2214,7 +2214,7 @@ const DIFFICULTY_PRESETS = {
     roots: SPELLING_IDS,
     qualities: ['major','minor','diminished','augmented'],
     inversions: ['root','1st','2nd'],
-    notation: { voicing: 'closed', articulation: 'arpeggio', hand: 'both',
+    notation: { voicing: 'closed', articulation: 'arpeggio', clef: 'both',
                 accidentals: 'onNotation', rangeLow: 'E2', rangeHigh: 'C6',
                 showName: 'tapToReveal', unconventionalSpellings: false }
   },
@@ -2222,7 +2222,7 @@ const DIFFICULTY_PRESETS = {
     roots: SPELLING_IDS,
     qualities: ['major','minor','diminished','augmented'],
     inversions: ['root','1st','2nd'],
-    notation: { voicing: 'mixed', articulation: 'mixed', hand: 'both',
+    notation: { voicing: 'mixed', articulation: 'mixed', clef: 'both',
                 accidentals: 'onNotation', rangeLow: 'E2', rangeHigh: 'C6',
                 showName: 'off', unconventionalSpellings: true }
   }
@@ -2273,7 +2273,15 @@ function saveNotationSettings() {
 function loadNotationSettings() {
   try {
     const raw = localStorage.getItem(NOTATION_STORAGE_KEY);
-    if (raw) Object.assign(state.notation, JSON.parse(raw));
+    if (!raw) return;
+    const loaded = JSON.parse(raw);
+    // Migrate "hand" (right/left/both) to "clef" (treble/bass/both).
+    if ('hand' in loaded && !('clef' in loaded)) {
+      const map = { right: 'treble', left: 'bass', both: 'both' };
+      loaded.clef = map[loaded.hand] || 'treble';
+      delete loaded.hand;
+    }
+    Object.assign(state.notation, loaded);
   } catch {}
 }
 
@@ -2284,12 +2292,12 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const RANGE_MIN_SEMITONES = 12; // require at least an octave between bounds
 const DIATONIC_INDEX = { C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6 };
 
-// Picker visible range per hand: a couple ledger positions above & below the
-// default staff so users can extend without exploding the size.
-function pickerVisibleFor(hand) {
-  if (hand === 'left')  return { trebleRange: null,                   bassRange: ['C2', 'E4'] };
-  if (hand === 'both')  return { trebleRange: ['C4', 'C6'],           bassRange: ['C2', 'B3'] };
-  return                       { trebleRange: ['G3', 'C6'],           bassRange: null };
+// Picker visible range per clef. Wide enough to cover the practical
+// piano range with several ledger positions above and below each staff.
+function pickerVisibleFor(clef) {
+  if (clef === 'bass')  return { trebleRange: null,            bassRange: ['C2', 'C7'] };
+  if (clef === 'both')  return { trebleRange: ['C4', 'C7'],    bassRange: ['C2', 'B3'] };
+  return                       { trebleRange: ['C2', 'C7'],    bassRange: null };
 }
 
 function naturalsInRange(lo, hi) {
@@ -2371,7 +2379,7 @@ function renderRangePicker() {
   const stage = $('range-picker-stage');
   stage.replaceChildren();
   const ns = state.notation;
-  const { trebleRange, bassRange } = pickerVisibleFor(ns.hand);
+  const { trebleRange, bassRange } = pickerVisibleFor(ns.clef);
   const VF = Vex.Flow;
 
   const spacing = 12; // staff line spacing in px (default 10; this is just a touch bigger)
@@ -2525,7 +2533,7 @@ function handleRangeTap(pitch) {
 }
 
 function resetRangeToDefault() {
-  const d = defaultRangeForHand(state.notation.hand);
+  const d = defaultRangeForClef(state.notation.clef);
   state.notation.rangeLow = d.low;
   state.notation.rangeHigh = d.high;
   pickerFirstTap = null;
@@ -2553,7 +2561,7 @@ function closeRangeModal() {
 function applyNotationSettingsToUI() {
   const ns = state.notation;
   setActiveSegment('format-segment', 'format', ns.format);
-  setActiveSegment('hand-segment', 'hand', ns.hand);
+  setActiveSegment('clef-segment', 'clef', ns.clef);
   setActiveSegment('voicing-segment', 'voicing', ns.voicing);
   setActiveSegment('articulation-segment', 'articulation', ns.articulation);
   setActiveSegment('arp-dir-segment', 'direction', ns.arpeggioDirection);
@@ -2614,19 +2622,19 @@ $('accidentals-segment').addEventListener('click', (e) => {
   saveNotationSettings();
   markCustomIfActive();
 });
-$('hand-segment').addEventListener('click', (e) => {
+$('clef-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
   if (!seg) return;
-  const hand = seg.dataset.hand;
-  state.notation.hand = hand;
-  // Reset range to sensible defaults for the chosen hand.
-  const d = defaultRangeForHand(hand);
+  const clef = seg.dataset.clef;
+  state.notation.clef = clef;
+  // Reset range to sensible defaults for the chosen clef.
+  const d = defaultRangeForClef(clef);
   state.notation.rangeLow = d.low;
   state.notation.rangeHigh = d.high;
   updateRangeCurrentLabel();
   // Force a fresh clef pick on next render for Both mode.
   if (state.session && state.session.lastCard) delete state.session.lastCard.chordClef;
-  setActiveSegment('hand-segment', 'hand', hand);
+  setActiveSegment('clef-segment', 'clef', clef);
   updateNotationRowVisibility();
   rerenderCurrentCard();
   saveNotationSettings();
