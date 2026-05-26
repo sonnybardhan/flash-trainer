@@ -1570,8 +1570,10 @@ function drawChordVoice(VF, ctx, stave, notes, articulation, width) {
   new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
   voice.draw(ctx, stave);
   if (articulation === 'arpeggio') {
-    const beams = VF.Beam.generateBeams(notes);
-    beams.forEach(b => b.setContext(ctx).draw());
+    // Force all eighth notes into one beam group — generateBeams' default
+    // grouping (by quarter beat) splits 3 eighths into 2+1.
+    const beam = new VF.Beam(notes);
+    beam.setContext(ctx).draw();
   }
 }
 
