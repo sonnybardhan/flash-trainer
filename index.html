@@ -564,6 +564,11 @@
     letter-spacing: 2px;
     text-transform: uppercase;
   }
+  /* Format toggle: show only one of text/notation */
+  .flash-card.format-notation .card-root,
+  .flash-card.format-notation .card-quality,
+  .flash-card.format-notation .card-inversion { display: none; }
+  .flash-card.format-text .card-notation { display: none; }
   .badge-low { background: var(--badge-low-bg); color: var(--badge-low-fg); border: 1px solid var(--badge-low-bd); }
   .badge-medium { background: var(--badge-med-bg); color: var(--badge-med-fg); border: 1px solid var(--badge-med-bd); }
   .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
@@ -769,6 +774,20 @@
         <div class="mode-target-controls">
           <div class="stepper" id="count-stepper" data-min="1" data-max="999" data-step="5" style="display:flex;"></div>
           <div class="stepper" id="time-stepper" data-min="1" data-max="120" data-step="1" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Display: mode toggle (chord label vs notation) -->
+  <div class="section">
+    <div class="section-label">Display</div>
+    <div class="panel">
+      <div class="form-row">
+        <label>Mode</label>
+        <div class="segment-control" id="format-segment">
+          <div class="segment" data-format="text">Chord label</div>
+          <div class="segment active" data-format="notation">Notation</div>
         </div>
       </div>
     </div>
@@ -1603,6 +1622,24 @@ $('meter-select').addEventListener('change', (e) => {
   updateCollapseMeta();
 });
 
+// Display mode (text vs notation) toggle
+$('format-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  const fmt = seg.dataset.format;
+  state.notation.format = fmt;
+  document.querySelectorAll('#format-segment .segment').forEach(s => {
+    s.classList.toggle('active', s.dataset.format === fmt);
+  });
+  const fc = $('flash-card');
+  fc.classList.toggle('format-notation', fmt === 'notation');
+  fc.classList.toggle('format-text', fmt === 'text');
+  if (state.session && state.session.lastCard) {
+    if (fmt === 'notation') renderNotation(state.session.lastCard, $('card-notation'));
+    else $('card-notation').replaceChildren();
+  }
+});
+
 $('add-focus-btn').addEventListener('click', () => {
   const spelling = [...state.selectedSpellings][0] || 'C';
   const quality = [...state.selectedQualities][0] || 'major';
@@ -1681,8 +1718,14 @@ function renderCard(card) {
   $('stat-progress').textContent = state.session.mode === 'count'
     ? `${state.session.cardCount} / ${state.session.target}`
     : `${state.session.cardCount}`;
-  renderNotation(card, $('card-notation'));
   const fc = $('flash-card');
+  fc.classList.toggle('format-notation', state.notation.format === 'notation');
+  fc.classList.toggle('format-text', state.notation.format === 'text');
+  if (state.notation.format === 'notation') {
+    renderNotation(card, $('card-notation'));
+  } else {
+    $('card-notation').replaceChildren();
+  }
   fc.classList.remove('transition');
   void fc.offsetWidth;
   fc.classList.add('transition');
