@@ -64,7 +64,8 @@ const state = {
     showName: 'tapToReveal',     // off | afterDelay | tapToReveal | always
     labelStyle: 'plain',         // plain | slash | figured
     unconventionalSpellings: false,
-    playSound: false             // piano audio on each card (lazy loads engine)
+    playSound: false,            // piano audio on each card (lazy loads engine)
+    pianoPreset: 'fluidr3'       // see PIANO_PRESETS in sound.js
   }
 };
 
@@ -544,6 +545,8 @@ function updateNotationRowVisibility() {
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
+  // Piano preset dropdown only when sound is on.
+  $('piano-preset-row').style.display = ns.playSound ? 'flex' : 'none';
 }
 
 // ============================================================
@@ -666,9 +669,22 @@ function applyNotationSettingsToUI() {
   $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
   $('play-sound-switch').classList.toggle('on', ns.playSound);
+  populatePianoPresetSelect();
+  $('piano-preset-select').value = ns.pianoPreset || 'fluidr3';
   if (ns.playSound) prefetchPianoEngine();
   updateRangeCurrentLabel();
   updateNotationRowVisibility();
+}
+
+function populatePianoPresetSelect() {
+  const sel = $('piano-preset-select');
+  if (sel.options.length) return; // already filled
+  for (const [id, spec] of Object.entries(PIANO_PRESETS)) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = spec.label;
+    sel.appendChild(o);
+  }
 }
 function rerenderCurrentCard() {
   if (state.session && state.session.lastCard) {
@@ -770,6 +786,12 @@ $('unconventional-switch').addEventListener('click', () => {
 $('play-sound-switch').addEventListener('click', () => {
   state.notation.playSound = !state.notation.playSound;
   $('play-sound-switch').classList.toggle('on', state.notation.playSound);
+  if (state.notation.playSound) prefetchPianoEngine();
+  updateNotationRowVisibility();
+  saveNotationSettings();
+});
+$('piano-preset-select').addEventListener('change', (e) => {
+  state.notation.pianoPreset = e.target.value;
   if (state.notation.playSound) prefetchPianoEngine();
   saveNotationSettings();
 });
