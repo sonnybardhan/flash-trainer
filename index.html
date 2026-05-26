@@ -1567,14 +1567,14 @@ function drawChordVoice(VF, ctx, stave, notes, articulation, width) {
     ? new VF.Voice({ num_beats: 4, beat_value: 4 })
     : new VF.Voice({ num_beats: 3, beat_value: 8 });
   voice.addTickables(notes);
+  // Construct the Beam BEFORE voice.draw so VexFlow marks the notes as
+  // beamed and skips drawing their flags. One beam group covers all three
+  // eighth notes (generateBeams' default 2+1 grouping is wrong here).
+  let beam = null;
+  if (articulation === 'arpeggio') beam = new VF.Beam(notes);
   new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
   voice.draw(ctx, stave);
-  if (articulation === 'arpeggio') {
-    // Force all eighth notes into one beam group — generateBeams' default
-    // grouping (by quarter beat) splits 3 eighths into 2+1.
-    const beam = new VF.Beam(notes);
-    beam.setContext(ctx).draw();
-  }
+  if (beam) beam.setContext(ctx).draw();
 }
 
 function setupRenderer(VF, container, width, height) {
