@@ -2562,9 +2562,19 @@ function renderRangePicker() {
     bounds.textContent = `${pickerFirstTap} — tap another pitch to set range`;
     bounds.classList.remove('error');
   } else {
-    bounds.textContent = `${ns.rangeLow} – ${ns.rangeHigh}`;
+    bounds.textContent = `${ns.rangeLow} – ${ns.rangeHigh}  ·  ${octaveSpanLabel(ns.rangeLow, ns.rangeHigh)}`;
     bounds.classList.remove('error');
   }
+}
+
+function octaveSpanLabel(lo, hi) {
+  const semis = Math.abs(pitchSemitones(parsePitchName(hi)) - pitchSemitones(parsePitchName(lo)));
+  const octaves = semis / 12;
+  if (Number.isInteger(octaves)) {
+    return `${octaves} octave${octaves === 1 ? '' : 's'}`;
+  }
+  // round to two decimals, strip trailing zero
+  return `${octaves.toFixed(2).replace(/0$/, '')} octaves`;
 }
 
 function handleRangeTap(pitch) {
