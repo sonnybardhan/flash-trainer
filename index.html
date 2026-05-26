@@ -574,6 +574,39 @@
     text-transform: uppercase;
   }
 
+  .range-open-btn {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 12px; font-family: var(--mono); font-size: 12px;
+    cursor: pointer; display: flex; align-items: center; gap: 8px;
+    min-width: 120px; justify-content: space-between;
+  }
+  .range-open-btn:hover { border-color: var(--border-strong); }
+  .range-open-chevron { color: var(--text-faint); font-size: 14px; }
+
+  .range-modal { max-width: 560px; width: calc(100vw - 32px); }
+  .range-modal-hint {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text-faint); letter-spacing: 1px;
+    text-transform: uppercase; margin-bottom: 12px; line-height: 1.5;
+  }
+  .range-picker-stage {
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    justify-content: center;
+  }
+  .range-picker-bounds {
+    font-family: var(--mono); font-size: 13px; color: var(--text);
+    letter-spacing: 2px; text-align: center; margin-top: 12px;
+  }
+  .range-picker-stage svg { display: block; }
+  .range-picker-stage .range-hit { cursor: pointer; fill: transparent; }
+  .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.12; }
+
   .card-notation {
     margin-top: 28px;
     width: 100%;
@@ -907,13 +940,12 @@
           <div class="segment" data-show-name="always">Always</div>
         </div>
       </div>
-      <div class="form-row" id="range-low-row">
-        <label>Range low</label>
-        <select id="range-low-select"></select>
-      </div>
-      <div class="form-row" id="range-high-row">
-        <label>Range high</label>
-        <select id="range-high-select"></select>
+      <div class="form-row" id="range-row">
+        <label>Range</label>
+        <button class="range-open-btn" id="range-open-btn">
+          <span id="range-current-label">C4 – A5</span>
+          <span class="range-open-chevron">›</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1089,6 +1121,19 @@
     <h2 class="modal-title" id="modal-title">Hold on</h2>
     <div class="modal-body" id="modal-body">Message here.</div>
     <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- Range picker modal -->
+<div class="modal-backdrop" id="range-modal-backdrop">
+  <div class="modal range-modal">
+    <h2 class="modal-title">Range</h2>
+    <div class="range-modal-hint">Tap a note above the highlighted span to extend the high bound, or below to extend the low bound.</div>
+    <div class="range-picker-stage" id="range-picker-stage"></div>
+    <div class="range-picker-bounds" id="range-picker-bounds">C4 – A5</div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" id="range-modal-close">Done</button>
+    </div>
   </div>
 </div>
 
@@ -2110,8 +2155,7 @@ function updateNotationRowVisibility() {
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
   $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
   $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
-  $('range-low-row').style.display = isNotation ? 'flex' : 'none';
-  $('range-high-row').style.display = isNotation ? 'flex' : 'none';
+  $('range-row').style.display = isNotation ? 'flex' : 'none';
   $('show-name-row').style.display = isNotation ? 'flex' : 'none';
   // Double root only meaningful in Both + Closed.
   const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
@@ -2215,26 +2259,151 @@ function loadNotationSettings() {
   } catch {}
 }
 
-// Pitch list for the Range dropdowns: naturals from C2 to C6.
-const RANGE_NOTES = (() => {
-  const out = [];
-  const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-  for (let oct = 2; oct <= 5; oct++) for (const l of letters) out.push(`${l}${oct}`);
-  out.push('C6');
-  return out;
-})();
+// ============================================================
+// Range picker — visual staff modal
+// ============================================================
+// Naturals shown on each clef in the picker. Includes a couple
+// ledger positions above and below the staff so the user can
+// extend beyond the lines.
+function pickerPitchesFor(hand) {
+  const range = (lo, hi) => {
+    const all = [];
+    for (let o = 2; o <= 6; o++) for (const l of ['C','D','E','F','G','A','B']) all.push({ name: `${l}${o}`, semi: pitchSemitones({letter:l, accidental:0, octave:o}) });
+    const loS = pitchSemitones(parsePitchName(lo));
+    const hiS = pitchSemitones(parsePitchName(hi));
+    return all.filter(p => p.semi >= loS && p.semi <= hiS).map(p => p.name);
+  };
+  if (hand === 'left')  return { bass:   range('C2', 'E4'), treble: [] };
+  if (hand === 'both')  return { bass:   range('G2', 'B3'), treble: range('C4', 'C6') };
+  return                      { bass:   [],                 treble: range('G3', 'C6') };
+}
 
-function populateRangeSelects() {
-  const low = $('range-low-select');
-  const high = $('range-high-select');
-  low.replaceChildren();
-  high.replaceChildren();
-  for (const n of RANGE_NOTES) {
-    const o1 = document.createElement('option'); o1.value = n; o1.textContent = n; low.appendChild(o1);
-    const o2 = document.createElement('option'); o2.value = n; o2.textContent = n; high.appendChild(o2);
+function updateRangeCurrentLabel() {
+  const label = `${state.notation.rangeLow} – ${state.notation.rangeHigh}`;
+  $('range-current-label').textContent = label;
+  $('range-picker-bounds').textContent = label;
+}
+
+function renderRangePicker() {
+  const stage = $('range-picker-stage');
+  stage.replaceChildren();
+  const ns = state.notation;
+  const { bass, treble } = pickerPitchesFor(ns.hand);
+  const VF = Vex.Flow;
+
+  // Estimate dimensions. Each whole note ~ 18px wide.
+  const maxCount = Math.max(bass.length, treble.length);
+  const noteW = 22;
+  const stavePadL = 60;  // clef + a touch of margin
+  const stavePadR = 14;
+  const width = Math.max(360, stavePadL + stavePadR + maxCount * noteW);
+  const isGrand = bass.length > 0 && treble.length > 0;
+  const height = isGrand ? 220 : 140;
+
+  const renderer = new VF.Renderer(stage, VF.Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const ctx = renderer.getContext();
+  const color = themeColor();
+  ctx.setFillStyle(color);
+  ctx.setStrokeStyle(color);
+
+  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
+  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
+
+  const drawClef = (clef, pitches, y) => {
+    if (!pitches.length) return null;
+    const stave = new VF.Stave(8, y, width - 16);
+    stave.addClef(clef);
+    stave.setContext(ctx).draw();
+    const notes = pitches.map(p => new VF.StaveNote({ clef, keys: [p.toLowerCase().replace(/(\d)/, '/$1')], duration: 'w' }));
+    const voice = new VF.Voice({ num_beats: pitches.length * 4, beat_value: 4 });
+    voice.addTickables(notes);
+    new VF.Formatter().joinVoices([voice]).format([voice], width - stavePadL - stavePadR);
+    voice.draw(ctx, stave);
+    return { stave, notes, pitches };
+  };
+
+  let trebleSet = null, bassSet = null;
+  if (isGrand) {
+    trebleSet = drawClef('treble', treble, 8);
+    bassSet   = drawClef('bass',   bass, 100);
+    new VF.StaveConnector(trebleSet.stave, bassSet.stave).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
+    new VF.StaveConnector(trebleSet.stave, bassSet.stave).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
+  } else if (treble.length) {
+    trebleSet = drawClef('treble', treble, 18);
+  } else {
+    bassSet = drawClef('bass', bass, 18);
   }
-  low.value = state.notation.rangeLow;
-  high.value = state.notation.rangeHigh;
+
+  // Post-process: opacity by in-range, add click hitboxes on top.
+  const svg = stage.querySelector('svg');
+  const wireSet = (set) => {
+    if (!set) return;
+    set.notes.forEach((note, i) => {
+      const pitchName = set.pitches[i];
+      const semi = pitchSemitones(parsePitchName(pitchName));
+      const inRange = semi >= loSemi && semi <= hiSemi;
+      const isBound = pitchName === ns.rangeLow || pitchName === ns.rangeHigh;
+      const groupId = note.attrs && note.attrs.id;
+      if (groupId) {
+        const g = svg.querySelector(`[id="${groupId}"]`);
+        if (g) g.setAttribute('opacity', isBound ? '1' : (inRange ? '0.85' : '0.18'));
+      }
+      // Click hitbox
+      const bbox = note.getBoundingBox && note.getBoundingBox();
+      const x = note.getAbsoluteX ? note.getAbsoluteX() : (bbox ? bbox.x : 0);
+      const ys = note.getYs ? note.getYs() : [bbox ? bbox.y : 0];
+      const y = ys[0];
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hit.setAttribute('class', 'range-hit');
+      hit.setAttribute('x', String(x - noteW / 2));
+      hit.setAttribute('y', String(y - 16));
+      hit.setAttribute('width', String(noteW));
+      hit.setAttribute('height', '32');
+      hit.style.cursor = 'pointer';
+      hit.addEventListener('click', () => updateRangeFromTap(pitchName));
+      svg.appendChild(hit);
+    });
+  };
+  wireSet(trebleSet);
+  wireSet(bassSet);
+}
+
+function updateRangeFromTap(pitch) {
+  const ns = state.notation;
+  const tappedSemi = pitchSemitones(parsePitchName(pitch));
+  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
+  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
+  if (tappedSemi === loSemi || tappedSemi === hiSemi) return;
+
+  let newLow = ns.rangeLow, newHigh = ns.rangeHigh;
+  if (tappedSemi > hiSemi) newHigh = pitch;
+  else if (tappedSemi < loSemi) newLow = pitch;
+  else {
+    const mid = (loSemi + hiSemi) / 2;
+    if (tappedSemi >= mid) newHigh = pitch;
+    else newLow = pitch;
+  }
+  // Guard against inverted bounds.
+  if (pitchSemitones(parsePitchName(newLow)) > pitchSemitones(parsePitchName(newHigh))) {
+    [newLow, newHigh] = [newHigh, newLow];
+  }
+  ns.rangeLow = newLow;
+  ns.rangeHigh = newHigh;
+  updateRangeCurrentLabel();
+  renderRangePicker();
+  rerenderCurrentCard();
+  saveNotationSettings();
+  markCustomIfActive();
+}
+
+function openRangeModal() {
+  updateRangeCurrentLabel();
+  renderRangePicker();
+  $('range-modal-backdrop').classList.add('active');
+}
+function closeRangeModal() {
+  $('range-modal-backdrop').classList.remove('active');
 }
 
 // Apply loaded settings to all notation UI controls.
@@ -2250,7 +2419,7 @@ function applyNotationSettingsToUI() {
   setActiveSegment('show-name-segment', 'showName', ns.showName);
   $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
-  populateRangeSelects();
+  updateRangeCurrentLabel();
   updateNotationRowVisibility();
 }
 function rerenderCurrentCard() {
@@ -2311,8 +2480,7 @@ $('hand-segment').addEventListener('click', (e) => {
   const d = defaultRangeForHand(hand);
   state.notation.rangeLow = d.low;
   state.notation.rangeHigh = d.high;
-  $('range-low-select').value = d.low;
-  $('range-high-select').value = d.high;
+  updateRangeCurrentLabel();
   // Force a fresh clef pick on next render for Both mode.
   if (state.session && state.session.lastCard) delete state.session.lastCard.chordClef;
   setActiveSegment('hand-segment', 'hand', hand);
@@ -2397,17 +2565,10 @@ $('difficulty-segment').addEventListener('click', (e) => {
   }
   apply();
 });
-$('range-low-select').addEventListener('change', (e) => {
-  state.notation.rangeLow = e.target.value;
-  rerenderCurrentCard();
-  saveNotationSettings();
-  markCustomIfActive();
-});
-$('range-high-select').addEventListener('change', (e) => {
-  state.notation.rangeHigh = e.target.value;
-  rerenderCurrentCard();
-  saveNotationSettings();
-  markCustomIfActive();
+$('range-open-btn').addEventListener('click', openRangeModal);
+$('range-modal-close').addEventListener('click', closeRangeModal);
+$('range-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'range-modal-backdrop') closeRangeModal();
 });
 
 $('add-focus-btn').addEventListener('click', () => {
