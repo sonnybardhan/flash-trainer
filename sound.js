@@ -20,13 +20,23 @@ const PIANO_PRESETS = {
 };
 const DEFAULT_PRESET_ID = 'fluidr3';
 
-// Tone shaping — tweak if too dark / too bright.
-const _LOWPASS_HZ  = 2200;
-const _LOWPASS_Q   = 0.55;
-const _MASTER_GAIN = 0.55;
+// EQ presets — each sets the lowshelf bass gain (dB), lowpass cutoff (Hz),
+// and the master gain. The "bassDb" on a preset is its default; the user's
+// bass slider in the Sound modal can override it.
+const EQ_PRESETS = {
+  neutral:   { bassDb:  0, lowpass: 4500, gain: 0.60, label: 'Neutral' },
+  warm:      { bassDb:  3, lowpass: 2200, gain: 0.55, label: 'Warm' },
+  mellow:    { bassDb:  2, lowpass: 1600, gain: 0.50, label: 'Mellow' },
+  bright:    { bassDb:  0, lowpass: 6000, gain: 0.65, label: 'Bright' },
+  bassBoost: { bassDb:  8, lowpass: 2600, gain: 0.55, label: 'Bass boost' }
+};
+const DEFAULT_EQ = { preset: 'warm', bassDb: 3 };
 
 let _player = null;
-let _outputNode = null;            // lowpass + gain chain we route notes into
+let _outputNode = null;            // entry point of the EQ chain
+let _lowshelf = null;
+let _lowpass = null;
+let _master = null;
 let _activePresetData = null;      // the loaded preset object (for queueWaveTable)
 let _activePresetId = null;        // which preset id is currently loaded
 let _playerScriptPromise = null;
@@ -65,15 +75,38 @@ function _loadPresetScript(presetId) {
 
 function _buildOutputChain() {
   if (_outputNode) return;
-  const filter = audioCtx.createBiquadFilter();
-  filter.type = 'lowpass';
-  filter.frequency.value = _LOWPASS_HZ;
-  filter.Q.value = _LOWPASS_Q;
-  const gain = audioCtx.createGain();
-  gain.gain.value = _MASTER_GAIN;
-  filter.connect(gain);
-  gain.connect(audioCtx.destination);
-  _outputNode = filter;
+  _lowshelf = audioCtx.createBiquadFilter();
+  _lowshelf.type = 'lowshelf';
+  _lowshelf.frequency.value = 200;
+  _lowshelf.gain.value = 0;
+
+  _lowpass = audioCtx.createBiquadFilter();
+  _lowpass.type = 'lowpass';
+  _lowpass.frequency.value = 2200;
+  _lowpass.Q.value = 0.55;
+
+  _master = audioCtx.createGain();
+  _master.gain.value = 0.55;
+
+  _lowshelf.connect(_lowpass);
+  _lowpass.connect(_master);
+  _master.connect(audioCtx.destination);
+  _outputNode = _lowshelf;
+  applyEQ();
+}
+
+// Apply state.notation.eq to the chain. Safe to call before chain is built;
+// will re-apply once it is. Falls back to DEFAULT_EQ if state isn't set.
+function applyEQ() {
+  if (!_lowshelf) return;
+  const eq = (state.notation && state.notation.eq) || DEFAULT_EQ;
+  const preset = EQ_PRESETS[eq.preset] || EQ_PRESETS.warm;
+  const bassDb = (eq.bassDb != null) ? eq.bassDb : preset.bassDb;
+  // Smooth changes to avoid clicks.
+  const t = audioCtx.currentTime;
+  _lowshelf.gain.setTargetAtTime(bassDb, t, 0.02);
+  _lowpass.frequency.setTargetAtTime(preset.lowpass, t, 0.02);
+  _master.gain.setTargetAtTime(preset.gain, t, 0.02);
 }
 
 async function _ensurePreset(presetId) {
@@ -135,4 +168,20 @@ async function playChord(pitches, opts) {
     _player.queueWaveTable(audioCtx, target, _activePresetData,
                             t0 + i * beatSec, pitchToMidi(p), noteDur);
   });
+}
+
+// Quick preview — play a C major triad with the current voicing/EQ/preset
+// settings so the user can audition the sound without starting a session.
+async function previewChord(articulation) {
+  const fakeCard = { spelling: 'C', quality: 'major', inversion: 'root' };
+  const pitches = computePlaybackPitches(fakeCard);
+  if (!pitches) return;
+  const direction = resolveDirection(state.notation.arpeggioDirection);
+  const bpm = state.metronome.bpm || 80;
+  const meter = state.metronome.meter || 4;
+  // Need to prime the audio context if it hasn't been already. The click
+  // handler that calls us is itself a user gesture, so resume() succeeds.
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  await playChord(pitches, { articulation, bpm, meter, direction });
 }

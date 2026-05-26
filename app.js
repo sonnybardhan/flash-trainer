@@ -65,7 +65,8 @@ const state = {
     labelStyle: 'plain',         // plain | slash | figured
     unconventionalSpellings: false,
     playSound: false,            // piano audio on each card (lazy loads engine)
-    pianoPreset: 'fluidr3'       // see PIANO_PRESETS in sound.js
+    pianoPreset: 'fluidr3',      // see PIANO_PRESETS in sound.js
+    eq: { preset: 'warm', bassDb: 3 }  // see EQ_PRESETS in sound.js
   }
 };
 
@@ -545,8 +546,10 @@ function updateNotationRowVisibility() {
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
-  // Piano preset dropdown only when sound is on.
+  // Piano preset dropdown + preview + EQ row only when sound is on.
   $('piano-preset-row').style.display = ns.playSound ? 'flex' : 'none';
+  $('piano-preview-row').style.display = ns.playSound ? 'flex' : 'none';
+  $('eq-row').style.display = ns.playSound ? 'flex' : 'none';
 }
 
 // ============================================================
@@ -671,6 +674,9 @@ function applyNotationSettingsToUI() {
   $('play-sound-switch').classList.toggle('on', ns.playSound);
   populatePianoPresetSelect();
   $('piano-preset-select').value = ns.pianoPreset || 'fluidr3';
+  if (!ns.eq) ns.eq = { preset: 'warm', bassDb: 3 };
+  applyEqToUI();
+  applyEQ();
   if (ns.playSound) prefetchPianoEngine();
   updateRangeCurrentLabel();
   updateNotationRowVisibility();
@@ -795,6 +801,62 @@ $('piano-preset-select').addEventListener('change', (e) => {
   if (state.notation.playSound) prefetchPianoEngine();
   saveNotationSettings();
 });
+$('preview-block-btn').addEventListener('click', () => previewChord('block'));
+$('preview-arp-btn').addEventListener('click', () => previewChord('arpeggio'));
+
+// ============================================================
+// Sound / EQ modal
+// ============================================================
+function updateEqCurrentLabel() {
+  const eq = state.notation.eq || { preset: 'warm', bassDb: 3 };
+  const presetLabel = (EQ_PRESETS[eq.preset] || EQ_PRESETS.warm).label;
+  const bassDb = (eq.bassDb != null) ? eq.bassDb : 0;
+  const bassStr = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
+  $('eq-current-label').textContent = `${presetLabel} · ${bassStr}`;
+}
+function applyEqToUI() {
+  const eq = state.notation.eq || { preset: 'warm', bassDb: 3 };
+  setActiveSegment('eq-preset-segment', 'eqPreset', eq.preset);
+  const bassDb = (eq.bassDb != null) ? eq.bassDb : (EQ_PRESETS[eq.preset] || EQ_PRESETS.warm).bassDb;
+  $('eq-bass-slider').value = String(bassDb);
+  $('eq-bass-value').textContent = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
+  updateEqCurrentLabel();
+}
+$('eq-open-btn').addEventListener('click', () => {
+  applyEqToUI();
+  $('eq-modal-backdrop').classList.add('active');
+});
+$('eq-modal-close').addEventListener('click', () => $('eq-modal-backdrop').classList.remove('active'));
+$('eq-modal-backdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'eq-modal-backdrop') $('eq-modal-backdrop').classList.remove('active');
+});
+$('eq-modal-reset').addEventListener('click', () => {
+  state.notation.eq = { preset: 'warm', bassDb: 3 };
+  applyEqToUI();
+  applyEQ();
+  saveNotationSettings();
+});
+$('eq-preset-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  const presetId = seg.dataset.eqPreset;
+  const presetDef = EQ_PRESETS[presetId] || EQ_PRESETS.warm;
+  state.notation.eq = { preset: presetId, bassDb: presetDef.bassDb };
+  applyEqToUI();
+  applyEQ();
+  saveNotationSettings();
+});
+$('eq-bass-slider').addEventListener('input', (e) => {
+  const bassDb = parseInt(e.target.value, 10);
+  const cur = state.notation.eq || { preset: 'warm', bassDb: 3 };
+  state.notation.eq = { preset: cur.preset, bassDb };
+  $('eq-bass-value').textContent = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
+  updateEqCurrentLabel();
+  applyEQ();
+  saveNotationSettings();
+});
+$('eq-preview-block').addEventListener('click', () => previewChord('block'));
+$('eq-preview-arp').addEventListener('click', () => previewChord('arpeggio'));
 $('label-style-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
   if (!seg) return;
@@ -1106,6 +1168,14 @@ $('start-btn').addEventListener('click', () => {
       ]
     });
     return;
+  }
+
+  // Prime the AudioContext synchronously from inside the click gesture
+  // so resume() is allowed when Play Sound is on but the metronome is off.
+  // (The metronome path was previously the only place that primed it.)
+  if (state.notation.playSound) {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   }
 
   state.session = {

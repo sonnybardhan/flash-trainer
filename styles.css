@@ -596,6 +596,20 @@
     max-width: 600px; width: calc(100vw - 32px);
     max-height: calc(100vh - 48px); overflow-y: auto;
   }
+  .modal.eq-modal { max-width: 480px; width: calc(100vw - 32px); }
+  .preview-btn-group { display: flex; gap: 6px; }
+  .preview-btn-group .chip { padding: 8px 12px; font-size: 12px; }
+  .eq-slider-wrap {
+    display: flex; align-items: center; gap: 10px;
+    flex: 1; justify-content: flex-end;
+  }
+  .eq-slider-wrap input[type="range"] {
+    flex: 1; max-width: 180px; accent-color: var(--accent);
+  }
+  .eq-bass-value {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text-dim); min-width: 48px; text-align: right;
+  }
   .range-modal-hint {
     font-family: var(--mono); font-size: 10px;
     color: var(--text-faint); letter-spacing: 1px;

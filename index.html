@@ -162,6 +162,20 @@
         <label>Piano</label>
         <select id="piano-preset-select"></select>
       </div>
+      <div class="form-row" id="piano-preview-row" style="display:none;">
+        <label>Preview</label>
+        <div class="preview-btn-group">
+          <button class="chip" id="preview-block-btn">Block ▶</button>
+          <button class="chip" id="preview-arp-btn">Arpeggio ▶</button>
+        </div>
+      </div>
+      <div class="form-row" id="eq-row" style="display:none;">
+        <label>EQ</label>
+        <button class="range-open-btn" id="eq-open-btn">
+          <span id="eq-current-label">Warm · +3 dB</span>
+          <span class="range-open-chevron">›</span>
+        </button>
+      </div>
       <div class="form-row" id="range-row">
         <label>Range</label>
         <button class="range-open-btn" id="range-open-btn">
@@ -358,6 +372,41 @@
     <div class="range-picker-actions">
       <button class="chip" id="range-modal-reset">Reset to default</button>
       <button class="chip active" id="range-modal-close">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sound / EQ modal -->
+<div class="modal-backdrop" id="eq-modal-backdrop">
+  <div class="modal eq-modal">
+    <h2 class="modal-title">Sound</h2>
+    <div class="form-row" style="border-bottom: none; padding-bottom: 0;">
+      <label>Preset</label>
+      <div class="segment-control" id="eq-preset-segment">
+        <div class="segment" data-eq-preset="neutral">Neutral</div>
+        <div class="segment active" data-eq-preset="warm">Warm</div>
+        <div class="segment" data-eq-preset="mellow">Mellow</div>
+        <div class="segment" data-eq-preset="bright">Bright</div>
+        <div class="segment" data-eq-preset="bassBoost">Bass+</div>
+      </div>
+    </div>
+    <div class="form-row" style="border-bottom: none;">
+      <label>Bass</label>
+      <div class="eq-slider-wrap">
+        <input type="range" id="eq-bass-slider" min="-12" max="12" step="1">
+        <span class="eq-bass-value" id="eq-bass-value">+3 dB</span>
+      </div>
+    </div>
+    <div class="form-row" style="border-bottom: none;">
+      <label>Preview</label>
+      <div class="preview-btn-group">
+        <button class="chip" id="eq-preview-block">Block ▶</button>
+        <button class="chip" id="eq-preview-arp">Arpeggio ▶</button>
+      </div>
+    </div>
+    <div class="range-picker-actions">
+      <button class="chip" id="eq-modal-reset">Reset</button>
+      <button class="chip active" id="eq-modal-close">Done</button>
     </div>
   </div>
 </div>
