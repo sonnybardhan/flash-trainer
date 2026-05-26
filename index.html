@@ -1792,11 +1792,12 @@ function renderChips(containerId, items, selectedSet, onToggle, labelFn) {
   });
 }
 
+const QUALITY_SHORT = { major: 'maj', minor: 'min', diminished: 'dim', augmented: 'aug' };
 function renderQualityChips() {
   renderChips('quality-chips', QUALITIES, state.selectedQualities, (q) => {
     if (state.selectedQualities.has(q)) state.selectedQualities.delete(q);
     else state.selectedQualities.add(q);
-  });
+  }, (q) => QUALITY_SHORT[q] || q);
 }
 function renderInversionChips() {
   renderChips('inversion-chips', INVERSIONS, state.selectedInversions, (i) => {
