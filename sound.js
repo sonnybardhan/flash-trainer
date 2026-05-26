@@ -20,23 +20,25 @@ const PIANO_PRESETS = {
 };
 const DEFAULT_PRESET_ID = 'fluidr3';
 
-// EQ presets — each sets the lowshelf bass gain (dB), lowpass cutoff (Hz),
-// and the master gain. The "bassDb" on a preset is its default; the user's
-// bass slider in the Sound modal can override it.
+// EQ presets — three-band EQ now: lowshelf bass (~250 Hz), peaking mid
+// (~1 kHz), and highshelf treble (~3.5 kHz). Each preset defines the dB
+// values for all three bands plus a master gain. The Sound modal's bass /
+// mid / treble sliders override the preset's defaults independently.
 const EQ_PRESETS = {
-  neutral:   { bassDb:  0, lowpass: 4500, gain: 0.60, label: 'Neutral' },
-  warm:      { bassDb:  3, lowpass: 2200, gain: 0.55, label: 'Warm' },
-  mellow:    { bassDb:  2, lowpass: 1600, gain: 0.50, label: 'Mellow' },
-  bright:    { bassDb:  0, lowpass: 6000, gain: 0.65, label: 'Bright' },
-  bassBoost: { bassDb:  8, lowpass: 2600, gain: 0.55, label: 'Bass boost' }
+  neutral:   { bassDb:  0, midDb:  0, trebleDb:  0, gain: 0.60, label: 'Neutral' },
+  warm:      { bassDb:  3, midDb:  0, trebleDb: -4, gain: 0.55, label: 'Warm' },
+  mellow:    { bassDb:  2, midDb: -1, trebleDb: -6, gain: 0.50, label: 'Mellow' },
+  bright:    { bassDb:  0, midDb:  1, trebleDb:  3, gain: 0.65, label: 'Bright' },
+  bassBoost: { bassDb:  8, midDb:  0, trebleDb: -2, gain: 0.55, label: 'Bass boost' }
 };
-const DEFAULT_EQ = { preset: 'warm', bassDb: 3 };
+const DEFAULT_EQ = { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
 
 let _player = null;
 let _outputNode = null;            // entry point of the EQ chain
-let _lowshelf = null;
-let _lowpass = null;
-let _master = null;
+let _lowshelf = null;              // bass
+let _peaking = null;               // mid
+let _highshelf = null;             // treble
+let _master = null;                // master gain
 let _activePresetData = null;      // the loaded preset object (for queueWaveTable)
 let _activePresetId = null;        // which preset id is currently loaded
 let _playerScriptPromise = null;
@@ -78,19 +80,26 @@ function _buildOutputChain() {
   if (_outputNode) return;
   _lowshelf = audioCtx.createBiquadFilter();
   _lowshelf.type = 'lowshelf';
-  _lowshelf.frequency.value = 200;
+  _lowshelf.frequency.value = 250;
   _lowshelf.gain.value = 0;
 
-  _lowpass = audioCtx.createBiquadFilter();
-  _lowpass.type = 'lowpass';
-  _lowpass.frequency.value = 2200;
-  _lowpass.Q.value = 0.55;
+  _peaking = audioCtx.createBiquadFilter();
+  _peaking.type = 'peaking';
+  _peaking.frequency.value = 1000;
+  _peaking.Q.value = 1.0;
+  _peaking.gain.value = 0;
+
+  _highshelf = audioCtx.createBiquadFilter();
+  _highshelf.type = 'highshelf';
+  _highshelf.frequency.value = 3500;
+  _highshelf.gain.value = 0;
 
   _master = audioCtx.createGain();
   _master.gain.value = 0.55;
 
-  _lowshelf.connect(_lowpass);
-  _lowpass.connect(_master);
+  _lowshelf.connect(_peaking);
+  _peaking.connect(_highshelf);
+  _highshelf.connect(_master);
   _master.connect(audioCtx.destination);
   _outputNode = _lowshelf;
   applyEQ();
@@ -102,11 +111,14 @@ function applyEQ() {
   if (!_lowshelf) return;
   const eq = (state.notation && state.notation.eq) || DEFAULT_EQ;
   const preset = EQ_PRESETS[eq.preset] || EQ_PRESETS.warm;
-  const bassDb = (eq.bassDb != null) ? eq.bassDb : preset.bassDb;
+  const bassDb   = (eq.bassDb   != null) ? eq.bassDb   : preset.bassDb;
+  const midDb    = (eq.midDb    != null) ? eq.midDb    : preset.midDb;
+  const trebleDb = (eq.trebleDb != null) ? eq.trebleDb : preset.trebleDb;
   // Smooth changes to avoid clicks.
   const t = audioCtx.currentTime;
-  _lowshelf.gain.setTargetAtTime(bassDb, t, 0.02);
-  _lowpass.frequency.setTargetAtTime(preset.lowpass, t, 0.02);
+  _lowshelf.gain.setTargetAtTime(bassDb,    t, 0.02);
+  _peaking.gain.setTargetAtTime(midDb,      t, 0.02);
+  _highshelf.gain.setTargetAtTime(trebleDb, t, 0.02);
   _master.gain.setTargetAtTime(preset.gain, t, 0.02);
 }
 

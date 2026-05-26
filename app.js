@@ -66,7 +66,7 @@ const state = {
     unconventionalSpellings: false,
     playSound: false,            // piano audio on each card (lazy loads engine)
     pianoPreset: 'fluidr3',      // see PIANO_PRESETS in sound.js
-    eq: { preset: 'warm', bassDb: 3 }  // see EQ_PRESETS in sound.js
+    eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 }  // see EQ_PRESETS in sound.js
   }
 };
 
@@ -807,19 +807,35 @@ $('preview-arp-btn').addEventListener('click', () => previewChord('arpeggio'));
 // ============================================================
 // Sound / EQ modal
 // ============================================================
+function _eqValues(eq) {
+  const preset = EQ_PRESETS[eq.preset] || EQ_PRESETS.warm;
+  return {
+    bassDb:   (eq.bassDb   != null) ? eq.bassDb   : preset.bassDb,
+    midDb:    (eq.midDb    != null) ? eq.midDb    : preset.midDb,
+    trebleDb: (eq.trebleDb != null) ? eq.trebleDb : preset.trebleDb
+  };
+}
+function _fmtDb(n) { return (n > 0 ? '+' : '') + n + ' dB'; }
+function _eqMatchesPreset(eq) {
+  const preset = EQ_PRESETS[eq.preset] || EQ_PRESETS.warm;
+  const v = _eqValues(eq);
+  return v.bassDb === preset.bassDb && v.midDb === preset.midDb && v.trebleDb === preset.trebleDb;
+}
 function updateEqCurrentLabel() {
-  const eq = state.notation.eq || { preset: 'warm', bassDb: 3 };
+  const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
   const presetLabel = (EQ_PRESETS[eq.preset] || EQ_PRESETS.warm).label;
-  const bassDb = (eq.bassDb != null) ? eq.bassDb : 0;
-  const bassStr = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
-  $('eq-current-label').textContent = `${presetLabel} · ${bassStr}`;
+  $('eq-current-label').textContent = _eqMatchesPreset(eq) ? presetLabel : `${presetLabel} · custom`;
 }
 function applyEqToUI() {
-  const eq = state.notation.eq || { preset: 'warm', bassDb: 3 };
+  const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
   setActiveSegment('eq-preset-segment', 'eqPreset', eq.preset);
-  const bassDb = (eq.bassDb != null) ? eq.bassDb : (EQ_PRESETS[eq.preset] || EQ_PRESETS.warm).bassDb;
-  $('eq-bass-slider').value = String(bassDb);
-  $('eq-bass-value').textContent = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
+  const v = _eqValues(eq);
+  $('eq-bass-slider').value = String(v.bassDb);
+  $('eq-bass-value').textContent = _fmtDb(v.bassDb);
+  $('eq-mid-slider').value = String(v.midDb);
+  $('eq-mid-value').textContent = _fmtDb(v.midDb);
+  $('eq-treble-slider').value = String(v.trebleDb);
+  $('eq-treble-value').textContent = _fmtDb(v.trebleDb);
   updateEqCurrentLabel();
 }
 $('eq-open-btn').addEventListener('click', () => {
@@ -831,7 +847,8 @@ $('eq-modal-backdrop').addEventListener('click', (e) => {
   if (e.target.id === 'eq-modal-backdrop') $('eq-modal-backdrop').classList.remove('active');
 });
 $('eq-modal-reset').addEventListener('click', () => {
-  state.notation.eq = { preset: 'warm', bassDb: 3 };
+  const preset = EQ_PRESETS.warm;
+  state.notation.eq = { preset: 'warm', bassDb: preset.bassDb, midDb: preset.midDb, trebleDb: preset.trebleDb };
   applyEqToUI();
   applyEQ();
   saveNotationSettings();
@@ -841,20 +858,26 @@ $('eq-preset-segment').addEventListener('click', (e) => {
   if (!seg) return;
   const presetId = seg.dataset.eqPreset;
   const presetDef = EQ_PRESETS[presetId] || EQ_PRESETS.warm;
-  state.notation.eq = { preset: presetId, bassDb: presetDef.bassDb };
+  state.notation.eq = {
+    preset: presetId,
+    bassDb: presetDef.bassDb, midDb: presetDef.midDb, trebleDb: presetDef.trebleDb
+  };
   applyEqToUI();
   applyEQ();
   saveNotationSettings();
 });
-$('eq-bass-slider').addEventListener('input', (e) => {
-  const bassDb = parseInt(e.target.value, 10);
-  const cur = state.notation.eq || { preset: 'warm', bassDb: 3 };
-  state.notation.eq = { preset: cur.preset, bassDb };
-  $('eq-bass-value').textContent = (bassDb > 0 ? '+' : '') + bassDb + ' dB';
+function _setEqBand(band, value) {
+  const cur = state.notation.eq || { preset: 'warm' };
+  state.notation.eq = { ...cur, [band]: value };
+  $(`eq-${band === 'bassDb' ? 'bass' : band === 'midDb' ? 'mid' : 'treble'}-value`)
+    .textContent = (value > 0 ? '+' : '') + value + ' dB';
   updateEqCurrentLabel();
   applyEQ();
   saveNotationSettings();
-});
+}
+$('eq-bass-slider').addEventListener('input',   (e) => _setEqBand('bassDb',   parseInt(e.target.value, 10)));
+$('eq-mid-slider').addEventListener('input',    (e) => _setEqBand('midDb',    parseInt(e.target.value, 10)));
+$('eq-treble-slider').addEventListener('input', (e) => _setEqBand('trebleDb', parseInt(e.target.value, 10)));
 $('eq-preview-block').addEventListener('click', () => previewChord('block'));
 $('eq-preview-arp').addEventListener('click', () => previewChord('arpeggio'));
 $('label-style-segment').addEventListener('click', (e) => {
