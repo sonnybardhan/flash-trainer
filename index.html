@@ -443,11 +443,24 @@
   #flashcard-view.active { display: flex; }
 
   .flash-header {
-    display: flex; justify-content: space-between; align-items: flex-start;
+    display: flex; justify-content: space-between; align-items: center;
     padding-top: 14px; padding-bottom: 12px;
+    padding-right: 40px;  /* room for the quit-X overlay */
     border-bottom: 1px solid var(--border);
     gap: 12px;
   }
+  .quit-x {
+    position: absolute; top: 10px; right: 6px;
+    width: 36px; height: 36px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: 24px; line-height: 1;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s;
+    z-index: 5;
+  }
+  .quit-x:hover { color: var(--text); background: var(--surface-2); }
+  #flashcard-view { position: relative; }
   .flash-stats {
     display: flex; gap: 18px; font-family: var(--mono); font-size: 12px;
     color: var(--text-dim); letter-spacing: 1px;
@@ -545,7 +558,13 @@
     font-family: var(--mono); font-size: 9px; font-weight: 500;
     letter-spacing: 2px; text-transform: uppercase;
   }
-  .card-focus-badge.empty { display: none; }
+  /* Empty badge reserves the same vertical space to avoid layout shift. */
+  .card-focus-badge.empty { visibility: hidden; }
+  .card-focus-badge:not(.empty) {
+    /* When visible, fill with one of the badge classes — the placeholder text
+       below keeps the height steady before any class swap happens. */
+  }
+  .card-focus-badge.empty::before { content: 'placeholder'; }
 
   .card-name-overlay {
     font-family: var(--serif);
@@ -636,13 +655,14 @@
 
   .card-notation {
     margin-top: 28px;
-    width: 100%;
-    max-width: 360px;
+    width: 360px;
+    max-width: 100%;
     display: flex;
     justify-content: center;
     align-items: center;
     min-height: 140px;
   }
+  .flash-card.format-notation.notation-grand .card-notation { min-height: 220px; }
   .card-notation svg { display: block; }
   .card-notation .notation-skip {
     font-family: var(--mono);
@@ -1088,6 +1108,7 @@
 
 <!-- Flashcard view -->
 <div id="flashcard-view">
+  <button class="quit-x" id="quit-x" aria-label="Quit session without saving">×</button>
   <div class="flash-header">
     <div class="flash-stats">
       <div class="stat-block">
@@ -1745,7 +1766,9 @@ function renderNotation(card, container) {
   const effectiveVoicing = resolveVoicing(card, ns.clef, ns.voicing);
   const isGrand = ns.clef === 'both';
 
-  const width = articulation === 'arpeggio' ? 340 : 300;
+  // Fixed dimensions regardless of articulation so Mixed mode doesn't
+  // shift the card width between block and arpeggio renders.
+  const width = 340;
   const height = isGrand ? 220 : 140;
   const ctx = setupRenderer(VF, container, width, height);
 
@@ -2691,6 +2714,7 @@ function rerenderCurrentCard() {
     const fc = $('flash-card');
     fc.classList.toggle('format-notation', state.notation.format === 'notation');
     fc.classList.toggle('format-text', state.notation.format === 'text');
+    fc.classList.toggle('notation-grand', state.notation.clef === 'both');
     if (state.notation.format === 'notation') {
       renderNotation(state.session.lastCard, $('card-notation'));
     } else {
@@ -2965,6 +2989,7 @@ function renderCard(card) {
   const fc = $('flash-card');
   fc.classList.toggle('format-notation', state.notation.format === 'notation');
   fc.classList.toggle('format-text', state.notation.format === 'text');
+  fc.classList.toggle('notation-grand', state.notation.clef === 'both');
   if (state.notation.format === 'notation') {
     renderNotation(card, $('card-notation'));
   } else {
@@ -3251,44 +3276,47 @@ $('end-btn').addEventListener('click', () => {
     title: 'End this session?',
     body: 'Your progress and notes will be saved to history.',
     actions: [
-      { label: 'End session', kind: 'danger', onClick: endSession },
+      { label: 'End session', kind: 'danger', onClick: () => endSession(true) },
       { label: 'Keep going', kind: 'secondary' }
     ]
   });
 });
+$('quit-x').addEventListener('click', () => endSession(false));
 
-function endSession() {
+function endSession(save = true) {
   clearInterval(timerInterval);
   clearInterval(advanceInterval);
   stopMetronome();
   if (!state.session) return;
 
-  const s = state.session;
-  const totalPaused = s.pausedDuration + (s.pauseStartedAt ? Date.now() - s.pauseStartedAt : 0);
-  const actualDuration = Math.floor((Date.now() - s.startedAt - totalPaused) / 1000);
+  if (save) {
+    const s = state.session;
+    const totalPaused = s.pausedDuration + (s.pauseStartedAt ? Date.now() - s.pauseStartedAt : 0);
+    const actualDuration = Math.floor((Date.now() - s.startedAt - totalPaused) / 1000);
 
-  const config = [
-    `${state.selectedSpellings.size} roots`,
-    `${[...state.selectedQualities].join('/')}`,
-    `${[...state.selectedInversions].map(formatInversion).join('/')}`,
-    state.metronome.enabled ? `${state.metronome.bpm}bpm ${state.metronome.meter}/4` : '',
-    state.focusItems.length ? `${state.focusItems.length} focus` : ''
-  ].filter(Boolean).join(' · ');
+    const config = [
+      `${state.selectedSpellings.size} roots`,
+      `${[...state.selectedQualities].join('/')}`,
+      `${[...state.selectedInversions].map(formatInversion).join('/')}`,
+      state.metronome.enabled ? `${state.metronome.bpm}bpm ${state.metronome.meter}/4` : '',
+      state.focusItems.length ? `${state.focusItems.length} focus` : ''
+    ].filter(Boolean).join(' · ');
 
-  const record = {
-    mode: s.mode,
-    reps: s.mode === 'count' ? s.target : null,
-    duration: s.mode === 'time' ? s.target : null,
-    actualReps: Math.max(0, s.cardCount - 1),
-    actualDuration,
-    config,
-    notes: s.notes,
-    startedAt: s.startedAt
-  };
+    const record = {
+      mode: s.mode,
+      reps: s.mode === 'count' ? s.target : null,
+      duration: s.mode === 'time' ? s.target : null,
+      actualReps: Math.max(0, s.cardCount - 1),
+      actualDuration,
+      config,
+      notes: s.notes,
+      startedAt: s.startedAt
+    };
 
-  const history = JSON.parse(localStorage.getItem('triad-history') || '[]');
-  history.push(record);
-  localStorage.setItem('triad-history', JSON.stringify(history.slice(-100)));
+    const history = JSON.parse(localStorage.getItem('triad-history') || '[]');
+    history.push(record);
+    localStorage.setItem('triad-history', JSON.stringify(history.slice(-100)));
+  }
 
   state.session = null;
   $('flashcard-view').classList.remove('active');
