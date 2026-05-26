@@ -66,7 +66,7 @@ const state = {
     unconventionalSpellings: false,
     playSound: false,            // piano audio on each card (lazy loads engine)
     pianoPreset: 'fluidr3',      // see PIANO_PRESETS in sound.js
-    eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 }  // see EQ_PRESETS in sound.js
+    eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 }  // see EQ_PRESETS in sound.js
   }
 };
 
@@ -823,7 +823,8 @@ function _eqValues(eq) {
   return {
     bassDb:   (eq.bassDb   != null) ? eq.bassDb   : preset.bassDb,
     midDb:    (eq.midDb    != null) ? eq.midDb    : preset.midDb,
-    trebleDb: (eq.trebleDb != null) ? eq.trebleDb : preset.trebleDb
+    trebleDb: (eq.trebleDb != null) ? eq.trebleDb : preset.trebleDb,
+    reverb:   (eq.reverb   != null) ? eq.reverb   : 10
   };
 }
 function _fmtDb(n) { return (n > 0 ? '+' : '') + n + ' dB'; }
@@ -831,6 +832,23 @@ function _eqMatchesPreset(eq) {
   const preset = EQ_PRESETS[eq.preset] || EQ_PRESETS.warm;
   const v = _eqValues(eq);
   return v.bassDb === preset.bassDb && v.midDb === preset.midDb && v.trebleDb === preset.trebleDb;
+}
+
+// iOS-style slider fill: paints the accent track segment from --low to --high
+// percent. For ±range sliders (bass/mid/treble) the fill straddles center;
+// for 0-N sliders (reverb) it fills from left.
+function _updateSliderFill(sliderEl, fromCenter = true) {
+  const min = parseFloat(sliderEl.min);
+  const max = parseFloat(sliderEl.max);
+  const val = parseFloat(sliderEl.value);
+  const pct = ((val - min) / (max - min)) * 100;
+  if (fromCenter) {
+    sliderEl.style.setProperty('--low',  Math.min(50, pct) + '%');
+    sliderEl.style.setProperty('--high', Math.max(50, pct) + '%');
+  } else {
+    sliderEl.style.setProperty('--low',  '0%');
+    sliderEl.style.setProperty('--high', pct + '%');
+  }
 }
 function _shortPianoLabel(id) {
   const full = (PIANO_PRESETS[id] || PIANO_PRESETS.fluidr3).label;
@@ -845,16 +863,22 @@ function updateEqCurrentLabel() {
   $('eq-current-label').textContent = `${piano} · ${eqStr}`;
 }
 function applyEqToUI() {
-  const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
+  const eq = state.notation.eq || { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 };
   setActiveSegment('eq-preset-segment', 'eqPreset', eq.preset);
   $('eq-piano-select').value = state.notation.pianoPreset || 'fluidr3';
   const v = _eqValues(eq);
   $('eq-bass-slider').value = String(v.bassDb);
   $('eq-bass-value').textContent = _fmtDb(v.bassDb);
+  _updateSliderFill($('eq-bass-slider'), true);
   $('eq-mid-slider').value = String(v.midDb);
   $('eq-mid-value').textContent = _fmtDb(v.midDb);
+  _updateSliderFill($('eq-mid-slider'), true);
   $('eq-treble-slider').value = String(v.trebleDb);
   $('eq-treble-value').textContent = _fmtDb(v.trebleDb);
+  _updateSliderFill($('eq-treble-slider'), true);
+  $('eq-reverb-slider').value = String(v.reverb);
+  $('eq-reverb-value').textContent = v.reverb + '%';
+  _updateSliderFill($('eq-reverb-slider'), false);
   updateEqCurrentLabel();
 }
 $('eq-open-btn').addEventListener('click', () => {
@@ -867,7 +891,11 @@ $('eq-modal-backdrop').addEventListener('click', (e) => {
 });
 $('eq-modal-reset').addEventListener('click', () => {
   const preset = EQ_PRESETS.warm;
-  state.notation.eq = { preset: 'warm', bassDb: preset.bassDb, midDb: preset.midDb, trebleDb: preset.trebleDb };
+  state.notation.eq = {
+    preset: 'warm',
+    bassDb: preset.bassDb, midDb: preset.midDb, trebleDb: preset.trebleDb,
+    reverb: 10
+  };
   applyEqToUI();
   applyEQ();
   saveNotationSettings();
@@ -877,26 +905,33 @@ $('eq-preset-segment').addEventListener('click', (e) => {
   if (!seg) return;
   const presetId = seg.dataset.eqPreset;
   const presetDef = EQ_PRESETS[presetId] || EQ_PRESETS.warm;
+  const cur = state.notation.eq || {};
   state.notation.eq = {
     preset: presetId,
-    bassDb: presetDef.bassDb, midDb: presetDef.midDb, trebleDb: presetDef.trebleDb
+    bassDb: presetDef.bassDb, midDb: presetDef.midDb, trebleDb: presetDef.trebleDb,
+    reverb: (cur.reverb != null) ? cur.reverb : 10  // preserve reverb across preset swaps
   };
   applyEqToUI();
   applyEQ();
   saveNotationSettings();
 });
-function _setEqBand(band, value) {
+function _setEqField(field, value, sliderId, formatter, fromCenter) {
   const cur = state.notation.eq || { preset: 'warm' };
-  state.notation.eq = { ...cur, [band]: value };
-  $(`eq-${band === 'bassDb' ? 'bass' : band === 'midDb' ? 'mid' : 'treble'}-value`)
-    .textContent = (value > 0 ? '+' : '') + value + ' dB';
+  state.notation.eq = { ...cur, [field]: value };
+  $(sliderId.replace('-slider', '-value')).textContent = formatter(value);
+  _updateSliderFill($(sliderId), fromCenter);
   updateEqCurrentLabel();
   applyEQ();
   saveNotationSettings();
 }
-$('eq-bass-slider').addEventListener('input',   (e) => _setEqBand('bassDb',   parseInt(e.target.value, 10)));
-$('eq-mid-slider').addEventListener('input',    (e) => _setEqBand('midDb',    parseInt(e.target.value, 10)));
-$('eq-treble-slider').addEventListener('input', (e) => _setEqBand('trebleDb', parseInt(e.target.value, 10)));
+$('eq-bass-slider').addEventListener('input',   (e) =>
+  _setEqField('bassDb',   parseInt(e.target.value, 10), 'eq-bass-slider',   _fmtDb, true));
+$('eq-mid-slider').addEventListener('input',    (e) =>
+  _setEqField('midDb',    parseInt(e.target.value, 10), 'eq-mid-slider',    _fmtDb, true));
+$('eq-treble-slider').addEventListener('input', (e) =>
+  _setEqField('trebleDb', parseInt(e.target.value, 10), 'eq-treble-slider', _fmtDb, true));
+$('eq-reverb-slider').addEventListener('input', (e) =>
+  _setEqField('reverb',   parseInt(e.target.value, 10), 'eq-reverb-slider', (v) => v + '%', false));
 $('eq-preview-block').addEventListener('click', () => previewChord('block'));
 $('eq-preview-arp').addEventListener('click', () => previewChord('arpeggio'));
 $('label-style-segment').addEventListener('click', (e) => {

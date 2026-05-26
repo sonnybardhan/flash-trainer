@@ -31,14 +31,17 @@ const EQ_PRESETS = {
   bright:    { bassDb:  0, midDb:  1, trebleDb:  3, gain: 0.65, label: 'Bright' },
   bassBoost: { bassDb:  8, midDb:  0, trebleDb: -2, gain: 0.55, label: 'Bass boost' }
 };
-const DEFAULT_EQ = { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4 };
+const DEFAULT_EQ = { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 };
 
 let _player = null;
 let _outputNode = null;            // entry point of the EQ chain
 let _lowshelf = null;              // bass
 let _peaking = null;               // mid
 let _highshelf = null;             // treble
+let _convolver = null;             // reverb impulse response
+let _wetGain = null;               // wet (reverb) level
 let _master = null;                // master gain
+const REVERB_MAX_WET = 0.45;       // wetGain at slider = 100
 let _activePresetData = null;      // the loaded preset object (for queueWaveTable)
 let _activePresetId = null;        // which preset id is currently loaded
 let _playerScriptPromise = null;
@@ -76,6 +79,20 @@ function _loadPresetScript(presetId) {
   return _presetScriptPromises[presetId];
 }
 
+// Generate a synthetic impulse response: white noise with exponential decay.
+// Used for the reverb convolver — saves shipping an IR audio file.
+function _makeImpulseResponse(ctx, durationSec = 2.0, decay = 2.5) {
+  const length = Math.floor(ctx.sampleRate * durationSec);
+  const buf = ctx.createBuffer(2, length, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+    }
+  }
+  return buf;
+}
+
 function _buildOutputChain() {
   if (_outputNode) return;
   _lowshelf = audioCtx.createBiquadFilter();
@@ -94,12 +111,22 @@ function _buildOutputChain() {
   _highshelf.frequency.value = 3500;
   _highshelf.gain.value = 0;
 
+  _convolver = audioCtx.createConvolver();
+  _convolver.buffer = _makeImpulseResponse(audioCtx, 2.2, 2.4);
+  _wetGain = audioCtx.createGain();
+  _wetGain.gain.value = 0;
+
   _master = audioCtx.createGain();
   _master.gain.value = 0.55;
 
+  // Dry: lowshelf -> peaking -> highshelf -> master.
+  // Wet: highshelf also feeds the convolver -> wetGain -> master.
   _lowshelf.connect(_peaking);
   _peaking.connect(_highshelf);
   _highshelf.connect(_master);
+  _highshelf.connect(_convolver);
+  _convolver.connect(_wetGain);
+  _wetGain.connect(_master);
   _master.connect(audioCtx.destination);
   _outputNode = _lowshelf;
   applyEQ();
@@ -114,12 +141,14 @@ function applyEQ() {
   const bassDb   = (eq.bassDb   != null) ? eq.bassDb   : preset.bassDb;
   const midDb    = (eq.midDb    != null) ? eq.midDb    : preset.midDb;
   const trebleDb = (eq.trebleDb != null) ? eq.trebleDb : preset.trebleDb;
+  const reverb01 = Math.max(0, Math.min(100, (eq.reverb != null) ? eq.reverb : 10)) / 100;
   // Smooth changes to avoid clicks.
   const t = audioCtx.currentTime;
   _lowshelf.gain.setTargetAtTime(bassDb,    t, 0.02);
   _peaking.gain.setTargetAtTime(midDb,      t, 0.02);
   _highshelf.gain.setTargetAtTime(trebleDb, t, 0.02);
   _master.gain.setTargetAtTime(preset.gain, t, 0.02);
+  _wetGain.gain.setTargetAtTime(reverb01 * REVERB_MAX_WET, t, 0.02);
 }
 
 // Wait for every zone in a preset to have its decoded AudioBuffer populated.
