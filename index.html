@@ -568,6 +568,12 @@
   .flash-card.format-text .card-name-overlay { display: none; }
   .flash-card.name-hidden .card-name-overlay { visibility: hidden; }
 
+  .difficulty-custom-note {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text-faint); letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
   .card-notation {
     margin-top: 28px;
     width: 100%;
@@ -817,6 +823,20 @@
   <div class="section">
     <div class="section-label">Display</div>
     <div class="panel">
+      <div class="form-row" id="difficulty-row">
+        <label>Difficulty</label>
+        <div class="segment-control" id="difficulty-segment">
+          <div class="segment" data-difficulty="1">1</div>
+          <div class="segment" data-difficulty="2">2</div>
+          <div class="segment" data-difficulty="3">3</div>
+          <div class="segment" data-difficulty="4">4</div>
+          <div class="segment" data-difficulty="5">5</div>
+        </div>
+      </div>
+      <div class="form-row" id="difficulty-custom-row" style="display:none;">
+        <label></label>
+        <div class="difficulty-custom-note">Custom configuration — tap a level to reset.</div>
+      </div>
       <div class="form-row">
         <label>Mode</label>
         <div class="segment-control" id="format-segment">
@@ -1754,6 +1774,7 @@ function renderRootChips() {
       if (state.selectedSpellings.has(s.id)) state.selectedSpellings.delete(s.id);
       else state.selectedSpellings.add(s.id);
       renderRootChips();
+      markCustomIfActive();
     };
     c.appendChild(b);
   });
@@ -1766,7 +1787,7 @@ function renderChips(containerId, items, selectedSet, onToggle, labelFn) {
     const b = document.createElement('button');
     b.className = 'chip' + (selectedSet.has(item) ? ' active' : '');
     b.innerHTML = labelFn ? labelFn(item) : item;
-    b.onclick = () => { onToggle(item); renderAll(); };
+    b.onclick = () => { onToggle(item); renderAll(); markCustomIfActive(); };
     c.appendChild(b);
   });
 }
@@ -2026,6 +2047,7 @@ $('root-presets').addEventListener('click', (e) => {
   }
   renderRootChips();
   renderFocusList();
+  markCustomIfActive();
 });
 
 $('mode-select').addEventListener('change', (e) => {
@@ -2083,6 +2105,87 @@ function updateNotationRowVisibility() {
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
+}
+
+// ============================================================
+// Difficulty presets (§11.3)
+// ============================================================
+const DIFFICULTY_PRESETS = {
+  1: { // Beginner
+    roots: ['C','D','E','F','G','A','B'],
+    qualities: ['major'],
+    inversions: ['root'],
+    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+                accidentals: 'keySig', rangeLow: 'C4', rangeHigh: 'G5',
+                showName: 'always', unconventionalSpellings: false }
+  },
+  2: { // Easy
+    roots: ['C','D','E','F','G','A','B','C#','F#'],
+    qualities: ['major','minor'],
+    inversions: ['root','1st'],
+    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+                accidentals: 'keySig', rangeLow: 'C4', rangeHigh: 'A5',
+                showName: 'always', unconventionalSpellings: false }
+  },
+  3: { // Intermediate
+    roots: ['C','D','E','F','G','A','B','C#','F#','G#'],
+    qualities: ['major','minor','diminished'],
+    inversions: ['root','1st','2nd'],
+    notation: { voicing: 'closed', articulation: 'block', hand: 'right',
+                accidentals: 'onNotation', rangeLow: 'C4', rangeHigh: 'A5',
+                showName: 'tapToReveal', unconventionalSpellings: false }
+  },
+  4: { // Advanced
+    roots: SPELLING_IDS,
+    qualities: ['major','minor','diminished','augmented'],
+    inversions: ['root','1st','2nd'],
+    notation: { voicing: 'closed', articulation: 'arpeggio', hand: 'both',
+                accidentals: 'onNotation', rangeLow: 'E2', rangeHigh: 'C6',
+                showName: 'tapToReveal', unconventionalSpellings: false }
+  },
+  5: { // Expert
+    roots: SPELLING_IDS,
+    qualities: ['major','minor','diminished','augmented'],
+    inversions: ['root','1st','2nd'],
+    notation: { voicing: 'mixed', articulation: 'mixed', hand: 'both',
+                accidentals: 'onNotation', rangeLow: 'E2', rangeHigh: 'C6',
+                showName: 'off', unconventionalSpellings: true }
+  }
+};
+
+let difficultyConfirmed = false;     // first-time confirm gate (per page load)
+let applyingPreset = false;          // suppresses Custom transition during preset apply
+let activeDifficulty = null;         // 1..5 or null = Custom
+
+function setDifficultyIndicator(level) {
+  activeDifficulty = level;
+  document.querySelectorAll('#difficulty-segment .segment').forEach(s => {
+    s.classList.toggle('active', String(level) === s.dataset.difficulty);
+  });
+  $('difficulty-custom-row').style.display = level === null ? 'flex' : 'none';
+}
+
+function applyDifficultyPreset(level) {
+  const p = DIFFICULTY_PRESETS[level];
+  if (!p) return;
+  applyingPreset = true;
+  state.selectedSpellings = new Set(p.roots);
+  state.selectedQualities = new Set(p.qualities);
+  state.selectedInversions = new Set(p.inversions);
+  Object.assign(state.notation, p.notation);
+  renderRootChips();
+  renderQualityChips();
+  renderInversionChips();
+  applyNotationSettingsToUI();
+  rerenderCurrentCard();
+  saveNotationSettings();
+  applyingPreset = false;
+  setDifficultyIndicator(level);
+}
+
+function markCustomIfActive() {
+  if (applyingPreset) return;
+  if (activeDifficulty !== null) setDifficultyIndicator(null);
 }
 
 // ============================================================
@@ -2167,6 +2270,7 @@ $('articulation-segment').addEventListener('click', (e) => {
   updateNotationRowVisibility();
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('arp-dir-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2183,6 +2287,7 @@ $('accidentals-segment').addEventListener('click', (e) => {
   setActiveSegment('accidentals-segment', 'accidentals', state.notation.accidentals);
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('hand-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2201,6 +2306,7 @@ $('hand-segment').addEventListener('click', (e) => {
   updateNotationRowVisibility();
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('double-root-switch').addEventListener('click', () => {
   state.notation.doubleRootInBass = !state.notation.doubleRootInBass;
@@ -2222,12 +2328,14 @@ $('voicing-segment').addEventListener('click', (e) => {
   updateNotationRowVisibility();
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('unconventional-switch').addEventListener('click', () => {
   state.notation.unconventionalSpellings = !state.notation.unconventionalSpellings;
   $('unconventional-switch').classList.toggle('on', state.notation.unconventionalSpellings);
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('label-style-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -2253,16 +2361,40 @@ $('show-name-segment').addEventListener('click', (e) => {
     renderChordNameOverlay(state.session.lastCard);
   }
   saveNotationSettings();
+  markCustomIfActive();
+});
+$('difficulty-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  const level = +seg.dataset.difficulty;
+  const apply = () => {
+    difficultyConfirmed = true;
+    applyDifficultyPreset(level);
+  };
+  if (!difficultyConfirmed) {
+    showModal({
+      title: 'Replace your selection?',
+      body: 'Applying a difficulty level overwrites your roots, qualities, inversions, and several display settings. Focus items, metronome, and advance mode are untouched.',
+      actions: [
+        { label: 'Cancel' },
+        { label: 'Continue', kind: 'primary', onClick: apply }
+      ]
+    });
+    return;
+  }
+  apply();
 });
 $('range-low-select').addEventListener('change', (e) => {
   state.notation.rangeLow = e.target.value;
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 $('range-high-select').addEventListener('change', (e) => {
   state.notation.rangeHigh = e.target.value;
   rerenderCurrentCard();
   saveNotationSettings();
+  markCustomIfActive();
 });
 
 $('add-focus-btn').addEventListener('click', () => {
