@@ -16,6 +16,28 @@
 let _player = null;
 let _preset = null;
 let _loadPromise = null;
+let _outputNode = null; // lowpass + gain chain we route notes into
+
+// Tunables for the warm/bassy tone. Cutoff lower = darker, Q higher = more
+// resonant. Gain caps the overall volume.
+const _LOWPASS_HZ = 2200;
+const _LOWPASS_Q  = 0.55;
+const _MASTER_GAIN = 0.55;
+
+function _buildOutputChain() {
+  if (_outputNode) return;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = _LOWPASS_HZ;
+  filter.Q.value = _LOWPASS_Q;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = _MASTER_GAIN;
+
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  _outputNode = filter;
+}
 
 function loadPianoEngine() {
   if (_loadPromise) return _loadPromise;
@@ -34,6 +56,7 @@ function loadPianoEngine() {
         _player = new WebAudioFontPlayer();
         _preset = window._tone_0000_FluidR3_GM_sf2_file;
         _player.adjustPreset(audioCtx, _preset);
+        _buildOutputChain();
         resolve();
       })
       .catch(reject);
@@ -64,11 +87,12 @@ async function playChord(pitches, opts) {
   const beatSec = 60 / bpm;
   const t0 = audioCtx.currentTime + 0.02;
 
+  const target = _outputNode || audioCtx.destination;
   if (articulation === 'block') {
     // All notes simultaneously, hold one bar.
     const durationSec = beatSec * meter;
     for (const p of pitches) {
-      _player.queueWaveTable(audioCtx, audioCtx.destination, _preset, t0,
+      _player.queueWaveTable(audioCtx, target, _preset, t0,
                               pitchToMidi(p), durationSec);
     }
     return;
@@ -78,7 +102,7 @@ async function playChord(pitches, opts) {
   const ordered = opts.direction === 'down' ? [...pitches].reverse() : pitches;
   const noteDur = beatSec * 0.9; // slight gap between notes
   ordered.forEach((p, i) => {
-    _player.queueWaveTable(audioCtx, audioCtx.destination, _preset,
+    _player.queueWaveTable(audioCtx, target, _preset,
                             t0 + i * beatSec, pitchToMidi(p), noteDur);
   });
 }
