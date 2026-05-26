@@ -569,6 +569,19 @@
   .flash-card.format-notation .card-quality,
   .flash-card.format-notation .card-inversion { display: none; }
   .flash-card.format-text .card-notation { display: none; }
+  /* Slash / figured-bass label styles collapse to a single root line */
+  .flash-card.label-slash .card-quality,
+  .flash-card.label-slash .card-inversion,
+  .flash-card.label-figured .card-quality,
+  .flash-card.label-figured .card-inversion { display: none; }
+  .card-root sup.figured, .card-root sub.figured {
+    font-size: 0.4em;
+    font-family: var(--serif);
+    font-weight: 300;
+    line-height: 1;
+  }
+  .card-root sup.figured { vertical-align: top; }
+  .card-root sub.figured { vertical-align: bottom; margin-left: -0.25em; }
   .badge-low { background: var(--badge-low-bg); color: var(--badge-low-fg); border: 1px solid var(--badge-low-bd); }
   .badge-medium { background: var(--badge-med-bg); color: var(--badge-med-fg); border: 1px solid var(--badge-med-bd); }
   .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
@@ -833,6 +846,18 @@
           <div class="segment active" data-accidentals="onNotation">On notation</div>
         </div>
       </div>
+      <div class="form-row" id="unconventional-row">
+        <label>Unconventional spellings</label>
+        <div class="switch" id="unconventional-switch"></div>
+      </div>
+      <div class="form-row" id="label-style-row">
+        <label>Label style</label>
+        <div class="segment-control" id="label-style-segment">
+          <div class="segment active" data-label-style="plain">Plain</div>
+          <div class="segment" data-label-style="slash">Slash</div>
+          <div class="segment" data-label-style="figured">Figured</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1094,6 +1119,16 @@ function formatInversion(i) {
   return i + ' inv';
 }
 
+// Build the HTML for a chord tone display (handles double accidentals).
+function toneToDisplayHTML(tone) {
+  let accHTML = '';
+  if (tone.accidental > 0) accHTML = '<span class="accidental">♯</span>'.repeat(tone.accidental);
+  else if (tone.accidental < 0) accHTML = '<span class="accidental">♭</span>'.repeat(-tone.accidental);
+  return tone.letter + accHTML;
+}
+
+const QUALITY_SUFFIX = { major: '', minor: 'm', diminished: '°', augmented: '+' };
+
 // ============================================================
 // Notation engine — pitch math
 // ============================================================
@@ -1247,6 +1282,31 @@ function accidentalString(acc) {
 function pitchToVexKey(p) {
   const accStr = accidentalString(p.accidental) || '';
   return `${p.letter.toLowerCase()}${accStr}/${p.octave}`;
+}
+
+// Enharmonic substitution for "unconventional spellings = off".
+// Preserves sounding pitch (semitone) but rewrites letter/octave to
+// avoid awkward spellings on the staff.
+const NATURAL_BY_PC = { 0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B' };
+function substitutePitch(p) {
+  if (state.notation.unconventionalSpellings) return p;
+  if (p.letter === 'C' && p.accidental === -1) return { ...p, letter: 'B', accidental: 0, octave: p.octave - 1 };
+  if (p.letter === 'F' && p.accidental === -1) return { ...p, letter: 'E', accidental: 0 };
+  if (p.letter === 'B' && p.accidental === 1)  return { ...p, letter: 'C', accidental: 0, octave: p.octave + 1 };
+  if (p.letter === 'E' && p.accidental === 1)  return { ...p, letter: 'F', accidental: 0 };
+  if (Math.abs(p.accidental) >= 2) {
+    const semi = pitchSemitones(p);
+    const pc = ((semi % 12) + 12) % 12;
+    if (pc in NATURAL_BY_PC) {
+      const letter = NATURAL_BY_PC[pc];
+      const octave = Math.floor((semi - LETTER_SEMI[letter]) / 12);
+      return { ...p, letter, accidental: 0, octave };
+    }
+  }
+  return p;
+}
+function substituteAll(pitches) {
+  return pitches.map(substitutePitch);
 }
 
 // ============================================================
@@ -1413,8 +1473,9 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
   const chordClef = resolveChordClef(card, ns.hand, 'closed') || 'treble';
   const placeRange = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
-  const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
-  if (!pitches) { renderSkip(container); return; }
+  const raw = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
+  if (!raw) { renderSkip(container); return; }
+  const pitches = substituteAll(raw);
 
   const chordNotes = articulation === 'block'
     ? [makeBlockNote(VF, chordClef, pitches, addAcc)]
@@ -1443,8 +1504,9 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
 
 function renderOpenGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns) {
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
-  const placed = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
-  if (!placed) { renderSkip(container); return; }
+  const raw = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
+  if (!raw) { renderSkip(container); return; }
+  const placed = { bass: substituteAll(raw.bass), treble: substituteAll(raw.treble) };
 
   if (articulation === 'block') {
     // Whole-note chord on each staff.
@@ -1523,8 +1585,9 @@ function renderNotation(card, container) {
 
   if (!isGrand) {
     const clef = ns.hand === 'left' ? 'bass' : 'treble';
-    const pitches = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
-    if (!pitches) { renderSkip(container); return; }
+    const raw = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
+    if (!raw) { renderSkip(container); return; }
+    const pitches = substituteAll(raw);
     const stave = new VF.Stave(8, 18, width - 16);
     stave.addClef(clef);
     if (keyName) stave.addKeySignature(keyName);
@@ -1973,9 +2036,12 @@ function updateNotationRowVisibility() {
   const showDir = isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
   $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
+  $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
   // Double root only meaningful in Both + Closed.
   const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
+  // Label style applies to chord-label mode (and will apply to notation reveal later).
+  $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
 }
 function rerenderCurrentCard() {
   if (state.session && state.session.lastCard) {
@@ -2053,6 +2119,18 @@ $('voicing-segment').addEventListener('click', (e) => {
   updateNotationRowVisibility();
   rerenderCurrentCard();
 });
+$('unconventional-switch').addEventListener('click', () => {
+  state.notation.unconventionalSpellings = !state.notation.unconventionalSpellings;
+  $('unconventional-switch').classList.toggle('on', state.notation.unconventionalSpellings);
+  rerenderCurrentCard();
+});
+$('label-style-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.labelStyle = seg.dataset.labelStyle;
+  setActiveSegment('label-style-segment', 'labelStyle', state.notation.labelStyle);
+  if (state.session && state.session.lastCard) renderChordLabel(state.session.lastCard);
+});
 
 $('add-focus-btn').addEventListener('click', () => {
   const spelling = [...state.selectedSpellings][0] || 'C';
@@ -2117,11 +2195,47 @@ function nextCard() {
   }
 }
 
+function renderChordLabel(card) {
+  const style = state.notation.labelStyle;
+  const fc = $('flash-card');
+  fc.classList.remove('label-plain', 'label-slash', 'label-figured');
+  fc.classList.add(`label-${style}`);
+
+  if (style === 'plain') {
+    $('card-root').innerHTML = formatSpellingDisplay(card.spelling);
+    $('card-quality').textContent = card.quality;
+    $('card-inversion').textContent = card.inversion === 'root' ? 'root position' :
+                                       card.inversion === '1st' ? 'first inversion' : 'second inversion';
+    return;
+  }
+
+  const tones = chordTones(card.spelling, card.quality);
+  const suffix = QUALITY_SUFFIX[card.quality];
+  const rootHTML = formatSpellingDisplay(card.spelling);
+  let html;
+  if (style === 'slash') {
+    if (card.inversion === 'root') {
+      html = `${rootHTML}${suffix}`;
+    } else {
+      const bassTone = card.inversion === '1st' ? tones[1] : tones[2];
+      html = `${rootHTML}${suffix}/${toneToDisplayHTML(bassTone)}`;
+    }
+  } else { // figured
+    if (card.inversion === 'root') {
+      html = `${rootHTML}${suffix}`;
+    } else if (card.inversion === '1st') {
+      html = `${rootHTML}${suffix}<sup class="figured">6</sup>`;
+    } else {
+      html = `${rootHTML}${suffix}<sup class="figured">6</sup><sub class="figured">4</sub>`;
+    }
+  }
+  $('card-root').innerHTML = html;
+  $('card-quality').textContent = '';
+  $('card-inversion').textContent = '';
+}
+
 function renderCard(card) {
-  $('card-root').innerHTML = formatSpellingDisplay(card.spelling);
-  $('card-quality').textContent = card.quality;
-  $('card-inversion').textContent = card.inversion === 'root' ? 'root position' :
-                                     card.inversion === '1st' ? 'first inversion' : 'second inversion';
+  renderChordLabel(card);
   const badge = $('card-focus-badge');
   if (card.focus) {
     badge.textContent = `${card.focus} priority`;
