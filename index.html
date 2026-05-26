@@ -61,12 +61,35 @@
     </div>
   </div>
 
-  <!-- Modes (degree drill only) -->
-  <div class="section drill-degrees-only" id="modes-section" style="display:none;">
-    <div class="section-label">Modes</div>
+  <!-- Intervals (interval drill only) -->
+  <div class="section drill-intervals-only" id="interval-config-section" style="display:none;">
+    <div class="section-label">Intervals</div>
     <div class="panel">
-      <div class="row grid-3" id="mode-chips"></div>
-      <div class="mode-hint" id="mode-hint">Major modes use a major chord. Minor modes use a minor chord.</div>
+      <div class="preset-row" id="interval-presets">
+        <button class="chip preset" data-interval-preset="all">all</button>
+        <button class="chip preset" data-interval-preset="diatonic">diatonic</button>
+        <button class="chip preset" data-interval-preset="clear">clear</button>
+      </div>
+      <div class="root-grid" id="interval-chips" style="grid-template-columns: repeat(6, 1fr);"></div>
+    </div>
+  </div>
+
+  <!-- Key + chord (degree drill only) -->
+  <div class="section drill-degrees-only" id="degree-config-section" style="display:none;">
+    <div class="section-label">Key &amp; chord</div>
+    <div class="panel">
+      <div class="form-row">
+        <label>Key</label>
+        <select id="degree-key-select"></select>
+      </div>
+      <div class="form-row" style="border-bottom:none;">
+        <label>Chord</label>
+        <div class="segment-control" id="degree-quality-segment">
+          <div class="segment" data-degree-quality="major">Major</div>
+          <div class="segment" data-degree-quality="minor">Minor</div>
+        </div>
+      </div>
+      <div class="mode-hint">The chord plays once at the start of each session. Replay it any time with the ▶ button on the card.</div>
     </div>
   </div>
 

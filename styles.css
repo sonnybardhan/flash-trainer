@@ -833,8 +833,7 @@
     flex-wrap: wrap;
     justify-content: center;
   }
-  .flash-card.drill-intervals .card-answer-chips,
-  .flash-card.drill-degrees   .card-answer-chips { display: flex; }
+  .flash-card.drill-degrees .card-answer-chips { display: flex; }
 
   .answer-chip {
     flex: 0 0 auto;

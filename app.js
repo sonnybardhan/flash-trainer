@@ -53,7 +53,9 @@ const state = {
   // Notation Mode settings (§12 defaults)
   notation: {
     drillType: 'chords',         // chords | intervals | degrees
-    degreeModes: ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'],
+    intervalSelection: ['m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7'],
+    degreeKey: 'C',              // single root spelling (e.g. 'C', 'F#', 'Bb')
+    degreeChordQuality: 'major', // major | minor
     format: 'notation',          // text | notation | both
     clef: 'treble',              // treble | bass | both
     voicing: 'closed',           // closed | open | mixed
@@ -534,28 +536,34 @@ function updateNotationRowVisibility() {
   const ns = state.notation;
   const drill = ns.drillType || 'chords';
   const isChord = drill === 'chords';
+  const isInterval = drill === 'intervals';
+  const isDegree = drill === 'degrees';
   const isNotation = ns.format === 'notation';
-  $('clef-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
-  // Voicing only meaningful in Both (single-staff modes force Closed, §3.2).
-  // Surfaced whenever Clef=Both, even in chord-label mode, since voicing
-  // also drives playback pitches.
-  $('voicing-row').style.display = (isChord && ns.clef === 'both') ? 'flex' : 'none';
-  $('articulation-row').style.display = (isChord && isNotation) ? 'flex' : 'none';
+  // Clef / accidentals / unconventional / range: always relevant for drills
+  // that render notation (chords[notation], intervals always, degrees on reveal).
+  const showStaffSettings = isChord ? isNotation : true;
+  $('clef-row').style.display          = showStaffSettings ? 'flex' : 'none';
+  $('accidentals-row').style.display   = showStaffSettings ? 'flex' : 'none';
+  $('unconventional-row').style.display = showStaffSettings ? 'flex' : 'none';
+  $('range-row').style.display         = showStaffSettings ? 'flex' : 'none';
+  // Articulation: chord drill (block/arpeggio chord), interval drill (block = double-stop,
+  // arpeggio = sequential). Hidden for degrees.
+  const showArticulation = (isChord && isNotation) || isInterval;
+  $('articulation-row').style.display = showArticulation ? 'flex' : 'none';
+  // Direction (up/down) only applies to arpeggiated CHORD voicing — not intervals.
   const showDir = isChord && isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
-  $('accidentals-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
-  $('unconventional-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
-  $('range-row').style.display = (isChord ? isNotation : true) ? 'flex' : 'none';
-  $('show-name-row').style.display =
-    drill === 'degrees' ? 'none' :
-    drill === 'intervals' ? 'flex' :
-    (isNotation ? 'flex' : 'none');
-  // Double root in bass: visible when Clef=Both + Closed, regardless of
-  // display mode (also affects playback).
+  // Voicing / double-root / label-style: chord-drill only.
+  $('voicing-row').style.display = (isChord && ns.clef === 'both') ? 'flex' : 'none';
   const showDoubleRoot = isChord && ns.clef === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
-  // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = (isChord && !isNotation) ? 'flex' : 'none';
+  // Show-name row: chord(notation) shows chord name; intervals shows interval name;
+  // degrees has its own reveal, hide row.
+  $('show-name-row').style.display =
+    isDegree   ? 'none' :
+    isInterval ? 'flex' :
+                 (isNotation ? 'flex' : 'none');
   // Difficulty / format toggles: chord-drill only.
   $('difficulty-row').style.display = isChord ? 'flex' : 'none';
   $('difficulty-custom-row').style.display =
@@ -678,9 +686,11 @@ function loadNotationSettings() {
 function applyNotationSettingsToUI() {
   const ns = state.notation;
   if (!ns.drillType) ns.drillType = 'chords';
-  if (!Array.isArray(ns.degreeModes) || ns.degreeModes.length === 0) {
-    ns.degreeModes = ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'];
+  if (!Array.isArray(ns.intervalSelection) || ns.intervalSelection.length === 0) {
+    ns.intervalSelection = ['m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7'];
   }
+  if (!ns.degreeKey) ns.degreeKey = 'C';
+  if (!ns.degreeChordQuality) ns.degreeChordQuality = 'major';
   setActiveSegment('drill-segment', 'drill', ns.drillType);
   setActiveSegment('format-segment', 'format', ns.format);
   setActiveSegment('clef-segment', 'clef', ns.clef);
@@ -700,7 +710,8 @@ function applyNotationSettingsToUI() {
   applyEQ();
   if (ns.playSound) prefetchPianoEngine();
   updateRangeCurrentLabel();
-  renderModeChips();
+  renderIntervalChips();
+  applyDegreeConfigToUI();
   updateDrillVisibility();
   updateNotationRowVisibility();
 }
@@ -712,6 +723,9 @@ function updateDrillVisibility() {
   const drill = state.notation.drillType || 'chords';
   document.querySelectorAll('.drill-chords-only').forEach(el => {
     el.style.display = drill === 'chords' ? '' : 'none';
+  });
+  document.querySelectorAll('.drill-intervals-only').forEach(el => {
+    el.style.display = drill === 'intervals' ? '' : 'none';
   });
   document.querySelectorAll('.drill-degrees-only').forEach(el => {
     el.style.display = drill === 'degrees' ? '' : 'none';
@@ -725,40 +739,53 @@ function updateDrillVisibility() {
   }
 }
 
-// Degree-drill mode picker chips.
-const DEGREE_MODE_LABELS = {
-  ionian:     'Ionian',
-  lydian:     'Lydian',
-  mixolydian: 'Mixolydian',
-  dorian:     'Dorian',
-  phrygian:   'Phrygian',
-  aeolian:    'Aeolian'
-};
-const DEGREE_MODE_ORDER = ['ionian', 'lydian', 'mixolydian', 'dorian', 'phrygian', 'aeolian'];
+// Interval-drill: selection chips for which intervals are in the drill pool.
+const INTERVAL_CHIP_ORDER = ['m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7'];
+const DIATONIC_INTERVALS = ['M2','M3','P4','P5','M6','M7'];
 
-function renderModeChips() {
-  const c = $('mode-chips');
+function renderIntervalChips() {
+  const c = $('interval-chips');
   if (!c) return;
   c.replaceChildren();
-  const active = new Set(state.notation.degreeModes || []);
-  DEGREE_MODE_ORDER.forEach(id => {
+  const active = new Set(state.notation.intervalSelection || INTERVAL_CHIP_ORDER);
+  INTERVAL_CHIP_ORDER.forEach(id => {
     const b = document.createElement('button');
     b.className = 'chip' + (active.has(id) ? ' active' : '');
-    b.textContent = DEGREE_MODE_LABELS[id];
+    b.textContent = id;
     b.onclick = () => {
-      const set = new Set(state.notation.degreeModes || []);
+      const set = new Set(state.notation.intervalSelection || []);
       if (set.has(id)) {
-        if (set.size === 1) return; // keep at least one mode selected
+        if (set.size === 1) return; // keep at least one selected
         set.delete(id);
       } else {
         set.add(id);
       }
-      state.notation.degreeModes = DEGREE_MODE_ORDER.filter(m => set.has(m));
+      state.notation.intervalSelection = INTERVAL_CHIP_ORDER.filter(x => set.has(x));
       saveNotationSettings();
-      renderModeChips();
+      renderIntervalChips();
     };
     c.appendChild(b);
   });
+}
+
+// Degree-drill: single-key select + chord-quality segment.
+const DEGREE_KEY_OPTIONS = [
+  'C','C#','Db','D','Eb','E','F','F#','Gb','G','G#','Ab','A','Bb','B'
+];
+function populateDegreeKeySelect() {
+  const sel = $('degree-key-select');
+  if (!sel || sel.options.length) return;
+  DEGREE_KEY_OPTIONS.forEach(id => {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = id;
+    sel.appendChild(o);
+  });
+}
+function applyDegreeConfigToUI() {
+  populateDegreeKeySelect();
+  $('degree-key-select').value = state.notation.degreeKey || 'C';
+  setActiveSegment('degree-quality-segment', 'degreeQuality',
+                    state.notation.degreeChordQuality || 'major');
 }
 
 function populatePianoPresetSelect() {
@@ -820,6 +847,31 @@ $('drill-segment').addEventListener('click', (e) => {
   setActiveSegment('drill-segment', 'drill', state.notation.drillType);
   updateDrillVisibility();
   updateNotationRowVisibility();
+  saveNotationSettings();
+});
+
+// Interval-selection preset row.
+$('interval-presets').addEventListener('click', (e) => {
+  const p = e.target.dataset.intervalPreset;
+  if (!p) return;
+  if (p === 'all')      state.notation.intervalSelection = [...INTERVAL_CHIP_ORDER];
+  else if (p === 'diatonic') state.notation.intervalSelection = [...DIATONIC_INTERVALS];
+  else if (p === 'clear')    state.notation.intervalSelection = [INTERVAL_CHIP_ORDER[0]];
+  renderIntervalChips();
+  saveNotationSettings();
+});
+
+// Degree drill: key select + quality segment.
+$('degree-key-select').addEventListener('change', (e) => {
+  state.notation.degreeKey = e.target.value;
+  saveNotationSettings();
+});
+$('degree-quality-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.degreeChordQuality = seg.dataset.degreeQuality;
+  setActiveSegment('degree-quality-segment', 'degreeQuality',
+                    state.notation.degreeChordQuality);
   saveNotationSettings();
 });
 $('articulation-segment').addEventListener('click', (e) => {
@@ -1205,7 +1257,13 @@ function renderCard(card) {
     renderDegreeCard(card);
     $('stat-progress').textContent = progressText();
     fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
-    playDegreeChordAndTone(card);
+    // First card of the session plays chord + tone; subsequent cards just tone.
+    if (!state.session.degreeIntroPlayed) {
+      state.session.degreeIntroPlayed = true;
+      playDegreeIntroThenTone(card);
+    } else {
+      playDegreeTone(card);
+    }
     return;
   }
 
@@ -1379,11 +1437,20 @@ $('start-btn').addEventListener('click', () => {
       });
       return;
     }
-  } else if (drill === 'degrees') {
-    if (!state.notation.degreeModes || state.notation.degreeModes.length === 0) {
+  } else if (drill === 'intervals') {
+    if (!state.notation.intervalSelection || state.notation.intervalSelection.length === 0) {
       showModal({
-        title: 'Pick at least one mode',
-        body: 'The degree drill needs at least one mode enabled.',
+        title: 'Pick at least one interval',
+        body: 'The interval drill needs at least one interval selected.',
+        actions: [{ label: 'OK', kind: 'primary' }]
+      });
+      return;
+    }
+  } else if (drill === 'degrees') {
+    if (!state.notation.degreeKey || !state.notation.degreeChordQuality) {
+      showModal({
+        title: 'Pick a key and chord',
+        body: 'Choose a key and major or minor chord for the degree drill.',
         actions: [{ label: 'OK', kind: 'primary' }]
       });
       return;
@@ -1423,9 +1490,19 @@ $('start-btn').addEventListener('click', () => {
     if (drill !== 'chords') prefetchPianoEngine();
   }
 
-  // Chip-driven drills force manual advance; the user controls progression
-  // by selecting an answer.
-  const effectiveAdvance = (drill === 'chords') ? advance : 'manual';
+  // Degree drill is chip-driven and forces manual advance. Chord and interval
+  // drills both auto-cycle per the user's advance setting.
+  const effectiveAdvance = (drill === 'degrees') ? 'manual' : advance;
+
+  const degreeAnchor = drill === 'degrees' ? buildDegreeSessionAnchor() : null;
+  if (drill === 'degrees' && !degreeAnchor) {
+    showModal({
+      title: 'Range too narrow for that chord',
+      body: 'Widen the range so the triad fits, then try again.',
+      actions: [{ label: 'OK', kind: 'primary' }]
+    });
+    return;
+  }
 
   state.session = {
     mode, advance: effectiveAdvance, target,
@@ -1439,7 +1516,9 @@ $('start-btn').addEventListener('click', () => {
     notes: [],
     startedAt: Date.now(),
     pausedDuration: 0,
-    pauseStartedAt: null
+    pauseStartedAt: null,
+    degreeAnchor,
+    degreeIntroPlayed: false
   };
 
   $('flashcard-view').classList.add('active');
@@ -1475,19 +1554,26 @@ function startAutoAdvance() {
 $('flash-card').addEventListener('click', (e) => {
   const s = state.session;
   if (!s || s.pauseStartedAt) return;
-  // For interval/degree drills, ignore taps on chips (they have their own
-  // handlers) and only advance once the card has been answered.
-  if (s.lastCard && (s.lastCard.drill === 'interval' || s.lastCard.drill === 'degree')) {
-    if (e.target.closest('.answer-chip')) return;
-    if (s.lastCard.answered && s.advance === 'manual') nextCard();
+  const card = s.lastCard;
+  // Degree drill: chip-driven, never advance on card tap.
+  if (card && card.drill === 'degree') {
     return;
   }
   const ns = state.notation;
-  // Tap-to-reveal: in notation mode, first tap reveals the name; in manual
-  // advance the second tap advances. In time-based advance, tap only reveals.
-  if (ns.format === 'notation' && ns.showName === 'tapToReveal' && s.lastCard && !s.lastCard.nameRevealed) {
-    s.lastCard.nameRevealed = true;
-    renderChordNameOverlay(s.lastCard);
+  // Interval drill: tap-to-reveal toggles the interval label, then advances.
+  if (card && card.drill === 'interval') {
+    if (ns.showName === 'tapToReveal' && !card.nameRevealed) {
+      card.nameRevealed = true;
+      revealIntervalName(card);
+      return;
+    }
+    if (s.advance === 'manual') nextCard();
+    return;
+  }
+  // Chord drill — existing behavior.
+  if (ns.format === 'notation' && ns.showName === 'tapToReveal' && card && !card.nameRevealed) {
+    card.nameRevealed = true;
+    renderChordNameOverlay(card);
     return;
   }
   if (s.advance === 'manual') nextCard();
@@ -1577,7 +1663,7 @@ $('replay-btn').addEventListener('click', async () => {
     return;
   }
   if (card.drill === 'degree') {
-    await replayDegreeChord(card);
+    await replayDegreeChord();
     return;
   }
   const pitches = computePlaybackPitches(card);

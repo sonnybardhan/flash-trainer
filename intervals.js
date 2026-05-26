@@ -1,27 +1,27 @@
 // ============================================================
 // intervals.js — notation-reading interval drill.
 //
-// Generates two pitches within the active range, renders them
-// on the staff, and exposes answer chips for the user to pick
-// the interval quality. Audio playback is optional per the
-// Play sound toggle; the replay button always replays the
-// two-note sequence regardless.
+// Behaves like the chord drill: two pitches drawn on the staff,
+// auto-cycle per the user's advance setting (tap / N seconds /
+// N beats / N bars). The user reads the interval visually and
+// optionally plays / sings it.
 //
-// Depends on globals from notation.js (pitchSemitones, LETTERS,
-// LETTER_SEMI, renderTwoNoteStave) and app.js (state, $).
+// User-controlled toggles (shared with the chord drill UI):
+//   - Show interval name (off / tap / always)
+//   - Play sound (on/off)
+//   - Articulation: block = double stop (both notes together),
+//                    arpeggio = sequential (one after the other)
+//
+// Card pool is drawn from state.notation.intervalSelection.
 // ============================================================
 
-// Interval pool. letterSteps = how many letter names apart the
-// two pitches are spelled (the diatonic distance). For most
-// intervals this is fixed by the quality; the tritone is
-// rendered as #4 going up, b5 going down.
 const INTERVAL_DEFS = [
   { id: 'm2', label: 'm2', semitones: 1,  letterSteps: 1 },
   { id: 'M2', label: 'M2', semitones: 2,  letterSteps: 1 },
   { id: 'm3', label: 'm3', semitones: 3,  letterSteps: 2 },
   { id: 'M3', label: 'M3', semitones: 4,  letterSteps: 2 },
   { id: 'P4', label: 'P4', semitones: 5,  letterSteps: 3 },
-  { id: 'TT', label: 'TT', semitones: 6,  letterSteps: 3 }, // letter step varies by direction (see computeTarget)
+  { id: 'TT', label: 'TT', semitones: 6,  letterSteps: 3 }, // letter step varies by direction
   { id: 'P5', label: 'P5', semitones: 7,  letterSteps: 4 },
   { id: 'm6', label: 'm6', semitones: 8,  letterSteps: 5 },
   { id: 'M6', label: 'M6', semitones: 9,  letterSteps: 5 },
@@ -35,8 +35,6 @@ function intervalLetterSteps(intervalDef, direction) {
   return intervalDef.letterSteps;
 }
 
-// Compute the second pitch from a root pitch + interval + direction.
-// Uses letter-step + semitone math so accidentals come out conventional.
 function computeIntervalTarget(rootPitch, intervalDef, direction) {
   const sign = direction === 'down' ? -1 : 1;
   const targetSemi = pitchSemitones(rootPitch) + sign * intervalDef.semitones;
@@ -51,79 +49,68 @@ function computeIntervalTarget(rootPitch, intervalDef, direction) {
   return { letter, accidental: targetSemi - natural, octave };
 }
 
-// Pool of root-pitch spellings to draw from. Using the standard 15-spelling
-// list keeps accidentals readable (no triple sharps etc.).
 const INTERVAL_ROOT_SPELLINGS = [
   'C', 'C#', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'Bb', 'B'
 ];
 
-function randomInRange(lo, hi) {
+function _randInt(lo, hi) {
   return Math.floor(Math.random() * (hi - lo + 1)) + lo;
 }
 
-// Enumerate root candidates whose pitch class fits at any octave that puts
-// the target also in range.
 function buildIntervalCard() {
   const ns = state.notation;
   const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
   const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
-  const maxAttempts = 60;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const spelling = INTERVAL_ROOT_SPELLINGS[randomInRange(0, INTERVAL_ROOT_SPELLINGS.length - 1)];
+  const enabledIds = (ns.intervalSelection && ns.intervalSelection.length)
+    ? ns.intervalSelection.filter(id => INTERVAL_BY_ID[id])
+    : INTERVAL_DEFS.map(d => d.id);
+  const lastId = state.session && state.session.lastCard && state.session.lastCard.drill === 'interval'
+    ? state.session.lastCard.intervalId : null;
+  for (let attempt = 0; attempt < 80; attempt++) {
+    // Prefer a different interval than the previous card when more than one is enabled.
+    let pool = enabledIds;
+    if (lastId && enabledIds.length > 1 && attempt < 30) {
+      pool = enabledIds.filter(id => id !== lastId);
+    }
+    const id = pool[_randInt(0, pool.length - 1)];
+    const intervalDef = INTERVAL_BY_ID[id];
+    const spelling = INTERVAL_ROOT_SPELLINGS[_randInt(0, INTERVAL_ROOT_SPELLINGS.length - 1)];
     const root = parseSpelling(spelling);
-    // Random octave that puts root in range.
     const candidateOctaves = [];
     for (let oct = 1; oct <= 7; oct++) {
       const s = pitchSemitones({ ...root, octave: oct });
       if (s >= loSemi && s <= hiSemi) candidateOctaves.push(oct);
     }
     if (candidateOctaves.length === 0) continue;
-    const rootPitch = { ...root, octave: candidateOctaves[randomInRange(0, candidateOctaves.length - 1)] };
-    const intervalDef = INTERVAL_DEFS[randomInRange(0, INTERVAL_DEFS.length - 1)];
-    // Try both directions in random order; first one in range wins.
+    const rootPitch = { ...root, octave: candidateOctaves[_randInt(0, candidateOctaves.length - 1)] };
     const dirs = Math.random() < 0.5 ? ['up', 'down'] : ['down', 'up'];
     for (const direction of dirs) {
       const target = computeIntervalTarget(rootPitch, intervalDef, direction);
       const tSemi = pitchSemitones(target);
       if (tSemi >= loSemi && tSemi <= hiSemi && Math.abs(target.accidental) <= 2) {
-        // Order pitches low-to-high for the staff (direction is implicit in which is higher).
         const [lowPitch, highPitch] = pitchSemitones(rootPitch) < tSemi
           ? [rootPitch, target] : [target, rootPitch];
         return {
           drill: 'interval',
           rootPitch, targetPitch: target,
           lowPitch, highPitch,
-          intervalId: intervalDef.id,
+          intervalId: id,
           direction,
-          answered: false
+          nameRevealed: false
         };
       }
     }
   }
-  // Fallback: simple M3 above middle of range
+  // Fallback: M3 from middle of range.
   const midSemi = Math.floor((loSemi + hiSemi) / 2);
-  const rootPitch = { letter: 'C', accidental: 0, octave: Math.floor((midSemi - 0) / 12) };
+  const rootPitch = { letter: 'C', accidental: 0, octave: Math.max(1, Math.floor(midSemi / 12)) };
   const target = computeIntervalTarget(rootPitch, INTERVAL_BY_ID.M3, 'up');
   return {
     drill: 'interval',
     rootPitch, targetPitch: target,
     lowPitch: rootPitch, highPitch: target,
-    intervalId: 'M3', direction: 'up', answered: false
+    intervalId: 'M3', direction: 'up', nameRevealed: false
   };
-}
-
-// Build the row of answer chips inside #card-answer-chips.
-function renderIntervalAnswerChips(card) {
-  const c = $('card-answer-chips');
-  c.replaceChildren();
-  INTERVAL_DEFS.forEach(def => {
-    const b = document.createElement('button');
-    b.className = 'answer-chip';
-    b.dataset.intervalId = def.id;
-    b.textContent = def.label;
-    b.onclick = () => handleIntervalAnswer(card, def.id, b);
-    c.appendChild(b);
-  });
 }
 
 function intervalRevealText(card) {
@@ -131,44 +118,19 @@ function intervalRevealText(card) {
   return `${card.intervalId} ${arrow}`;
 }
 
-function handleIntervalAnswer(card, pickedId, chipEl) {
-  if (card.answered) return;
-  card.answered = true;
-  card.userPicked = pickedId;
-  const correct = pickedId === card.intervalId;
-  card.correct = correct;
-  // Mark chips.
-  const allChips = $('card-answer-chips').querySelectorAll('.answer-chip');
-  allChips.forEach(c => {
-    c.classList.add('disabled');
-    if (c.dataset.intervalId === card.intervalId) c.classList.add('correct');
-    if (!correct && c.dataset.intervalId === pickedId) c.classList.add('wrong');
-  });
-  // Reveal label.
-  const label = $('card-reveal-label');
-  label.textContent = intervalRevealText(card);
-  label.classList.remove('hidden', 'wrong', 'correct');
-  label.classList.add(correct ? 'correct' : 'wrong');
-  // Track stats.
-  if (state.session) {
-    state.session.intervalStats = state.session.intervalStats || { right: 0, total: 0 };
-    state.session.intervalStats.total++;
-    if (correct) state.session.intervalStats.right++;
-  }
-}
-
-// Initial pre-answer state of the reveal label (hidden when interval-name
-// toggle is off, visible when on).
-function renderIntervalRevealPreview(card) {
+// Set the reveal label according to the show-name setting.
+function revealIntervalName(card) {
   const label = $('card-reveal-label');
   const showName = state.notation.showName;
+  label.classList.remove('correct', 'wrong');
+  label.textContent = intervalRevealText(card);
   if (showName === 'always') {
-    label.textContent = intervalRevealText(card);
-    label.classList.remove('hidden', 'wrong', 'correct');
+    label.classList.remove('hidden');
+  } else if (showName === 'tapToReveal') {
+    if (card.nameRevealed) label.classList.remove('hidden');
+    else label.classList.add('hidden');
   } else {
-    label.textContent = intervalRevealText(card); // ensure space reserved
     label.classList.add('hidden');
-    label.classList.remove('wrong', 'correct');
   }
 }
 
@@ -176,19 +138,28 @@ function renderIntervalCard(card) {
   $('card-notation').replaceChildren();
   $('card-answer-chips').replaceChildren();
   renderTwoNoteStave(card.lowPitch, card.highPitch, $('card-notation'));
-  renderIntervalAnswerChips(card);
-  renderIntervalRevealPreview(card);
+  revealIntervalName(card);
 }
 
-// Replay button action — plays the two-note sequence in original direction.
-async function replayIntervalAudio(card) {
+// Block = play both pitches together (double stop). Arpeggio = sequential.
+async function playIntervalAudio(card) {
+  const articulation = resolveArticulation(state.notation.articulation);
   const bpm = state.metronome.bpm || 80;
-  const gap = Math.max(0.35, 60 / bpm * 0.6);
-  await playSequence([card.rootPitch, card.targetPitch], gap, gap * 0.95);
+  const beatSec = 60 / bpm;
+  if (articulation === 'block') {
+    await playSequence([[card.lowPitch, card.highPitch]], 0, beatSec * 2);
+    return;
+  }
+  // arpeggio: play root then target (preserves card's original direction).
+  const seq = [card.rootPitch, card.targetPitch];
+  await playSequence(seq, beatSec * 0.6, beatSec * 0.55);
 }
 
-// Auto-play after card change if the play-sound toggle is on.
+async function replayIntervalAudio(card) {
+  await playIntervalAudio(card);
+}
+
 function maybePlayIntervalAudio(card) {
   if (!state.notation.playSound) return;
-  replayIntervalAudio(card);
+  playIntervalAudio(card);
 }
