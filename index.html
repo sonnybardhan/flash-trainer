@@ -806,6 +806,13 @@
           <div class="segment" data-direction="mixed">Mixed</div>
         </div>
       </div>
+      <div class="form-row" id="accidentals-row">
+        <label>Accidentals</label>
+        <div class="segment-control" id="accidentals-segment">
+          <div class="segment" data-accidentals="keySig">Key sig</div>
+          <div class="segment active" data-accidentals="onNotation">On notation</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1174,6 +1181,52 @@ function pitchToVexKey(p) {
 }
 
 // ============================================================
+// Notation engine — key signatures (Mode A)
+// ============================================================
+// Map root spelling -> VexFlow key signature name. Only the
+// standard 15 keys (each direction) are supported; anything
+// else (e.g. G# major, Db/Gb minor) falls back to Mode B.
+const MAJOR_KEY_SIGS = {
+  'C': 'C', 'G': 'G', 'D': 'D', 'A': 'A', 'E': 'E', 'B': 'B', 'F#': 'F#', 'C#': 'C#',
+  'F': 'F', 'Bb': 'Bb', 'Eb': 'Eb', 'Ab': 'Ab', 'Db': 'Db', 'Gb': 'Gb', 'Cb': 'Cb'
+};
+const MINOR_KEY_SIGS = {
+  'A': 'Am', 'E': 'Em', 'B': 'Bm', 'F#': 'F#m', 'C#': 'C#m', 'G#': 'G#m', 'D#': 'D#m', 'A#': 'A#m',
+  'D': 'Dm', 'G': 'Gm', 'C': 'Cm', 'F': 'Fm', 'Bb': 'Bbm', 'Eb': 'Ebm', 'Ab': 'Abm'
+};
+
+// For each key, the implied accidental for each letter (sharp = 1, flat = -1).
+// Letters not in the map are natural (0).
+const KEY_ACCIDENTALS = {
+  'C':   {}, 'G':   {F:1}, 'D':   {F:1,C:1}, 'A':   {F:1,C:1,G:1}, 'E':   {F:1,C:1,G:1,D:1},
+  'B':   {F:1,C:1,G:1,D:1,A:1}, 'F#':  {F:1,C:1,G:1,D:1,A:1,E:1}, 'C#':  {F:1,C:1,G:1,D:1,A:1,E:1,B:1},
+  'F':   {B:-1}, 'Bb':  {B:-1,E:-1}, 'Eb':  {B:-1,E:-1,A:-1}, 'Ab':  {B:-1,E:-1,A:-1,D:-1},
+  'Db':  {B:-1,E:-1,A:-1,D:-1,G:-1}, 'Gb':  {B:-1,E:-1,A:-1,D:-1,G:-1,C:-1}, 'Cb':  {B:-1,E:-1,A:-1,D:-1,G:-1,C:-1,F:-1},
+  'Am':  {}, 'Em':  {F:1}, 'Bm':  {F:1,C:1}, 'F#m': {F:1,C:1,G:1}, 'C#m': {F:1,C:1,G:1,D:1},
+  'G#m': {F:1,C:1,G:1,D:1,A:1}, 'D#m': {F:1,C:1,G:1,D:1,A:1,E:1}, 'A#m': {F:1,C:1,G:1,D:1,A:1,E:1,B:1},
+  'Dm':  {B:-1}, 'Gm':  {B:-1,E:-1}, 'Cm':  {B:-1,E:-1,A:-1}, 'Fm':  {B:-1,E:-1,A:-1,D:-1},
+  'Bbm': {B:-1,E:-1,A:-1,D:-1,G:-1}, 'Ebm': {B:-1,E:-1,A:-1,D:-1,G:-1,C:-1}, 'Abm': {B:-1,E:-1,A:-1,D:-1,G:-1,C:-1,F:-1}
+};
+
+function keySigFor(spelling, quality) {
+  // Only major/minor get key signatures. Dim/aug always render with accidentals on notes (§6).
+  if (quality === 'major') return MAJOR_KEY_SIGS[spelling] || null;
+  if (quality === 'minor') return MINOR_KEY_SIGS[spelling] || null;
+  return null;
+}
+
+function impliedAccidental(keyName, letter) {
+  if (!keyName) return 0;
+  return (KEY_ACCIDENTALS[keyName] || {})[letter] || 0;
+}
+
+function accidentalModifierFor(actual, implied) {
+  if (actual === implied) return null;
+  if (actual === 0) return 'n'; // natural cancels a key-sig sharp/flat
+  return actual > 0 ? '#'.repeat(actual) : 'b'.repeat(-actual);
+}
+
+// ============================================================
 // Notation engine — rendering
 // ============================================================
 function pickStaveClef(hand) {
@@ -1210,6 +1263,9 @@ function renderNotation(card, container) {
 
   const articulation = resolveArticulation(ns.articulation);
   const direction = resolveDirection(ns.arpeggioDirection);
+  const keyName = ns.accidentals === 'keySig'
+    ? keySigFor(card.spelling, card.quality)
+    : null;
 
   const VF = Vex.Flow;
   const width = articulation === 'arpeggio' ? 320 : 280;
@@ -1223,14 +1279,19 @@ function renderNotation(card, container) {
 
   const stave = new VF.Stave(8, 18, width - 16);
   stave.addClef(clef);
+  if (keyName) stave.addKeySignature(keyName);
   stave.setContext(ctx).draw();
+
+  const addAccidentals = (note, pitchesArr) => {
+    pitchesArr.forEach((p, i) => {
+      const accStr = accidentalModifierFor(p.accidental, impliedAccidental(keyName, p.letter));
+      if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
+    });
+  };
 
   if (articulation === 'block') {
     const note = new VF.StaveNote({ clef, keys: pitches.map(pitchToVexKey), duration: 'w', auto_stem: true });
-    pitches.forEach((p, i) => {
-      const accStr = accidentalString(p.accidental);
-      if (accStr) note.addModifier(new VF.Accidental(accStr), i);
-    });
+    addAccidentals(note, pitches);
     const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
     voice.addTickables([note]);
     new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
@@ -1240,8 +1301,7 @@ function renderNotation(card, container) {
     const ordered = direction === 'down' ? [...pitches].reverse() : pitches;
     const notes = ordered.map(p => {
       const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(p)], duration: '8', auto_stem: true });
-      const accStr = accidentalString(p.accidental);
-      if (accStr) n.addModifier(new VF.Accidental(accStr), 0);
+      addAccidentals(n, [p]);
       return n;
     });
     const voice = new VF.Voice({ num_beats: 3, beat_value: 8 });
@@ -1673,10 +1733,11 @@ function setActiveSegment(segmentId, attr, value) {
   });
 }
 function updateNotationRowVisibility() {
-  $('articulation-row').style.display = state.notation.format === 'notation' ? 'flex' : 'none';
-  const showDir = state.notation.format === 'notation' &&
-                  state.notation.articulation !== 'block';
+  const isNotation = state.notation.format === 'notation';
+  $('articulation-row').style.display = isNotation ? 'flex' : 'none';
+  const showDir = isNotation && state.notation.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
+  $('accidentals-row').style.display = isNotation ? 'flex' : 'none';
 }
 function rerenderCurrentCard() {
   if (state.session && state.session.lastCard) {
@@ -1711,6 +1772,13 @@ $('arp-dir-segment').addEventListener('click', (e) => {
   if (!seg) return;
   state.notation.arpeggioDirection = seg.dataset.direction;
   setActiveSegment('arp-dir-segment', 'direction', state.notation.arpeggioDirection);
+  rerenderCurrentCard();
+});
+$('accidentals-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.accidentals = seg.dataset.accidentals;
+  setActiveSegment('accidentals-segment', 'accidentals', state.notation.accidentals);
   rerenderCurrentCard();
 });
 
