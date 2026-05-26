@@ -460,7 +460,8 @@
     z-index: 5;
   }
   .quit-x:hover { color: var(--text); background: var(--surface-2); }
-  #flashcard-view { position: relative; }
+  /* #flashcard-view already has position: fixed, which scopes the absolute
+     X button — do NOT override its position here. */
   .flash-stats {
     display: flex; gap: 18px; font-family: var(--mono); font-size: 12px;
     color: var(--text-dim); letter-spacing: 1px;
@@ -664,6 +665,16 @@
   }
   .flash-card.format-notation.notation-grand .card-notation { min-height: 220px; }
   .card-notation svg { display: block; }
+  /* Force every VexFlow-rendered stroke and fill to the active --text color.
+     VexFlow sets stroke="black"/fill="black" inline on noteheads, stems,
+     beams, ledger lines, etc., which would otherwise stay black in dark mode
+     and make ledger lines (in particular) invisible against the dark surface. */
+  .card-notation svg [stroke]:not([stroke="none"]):not([stroke="transparent"]) {
+    stroke: var(--text) !important;
+  }
+  .card-notation svg [fill]:not([fill="none"]):not([fill="transparent"]) {
+    fill: var(--text) !important;
+  }
   .card-notation .notation-skip {
     font-family: var(--mono);
     font-size: 11px;
