@@ -962,13 +962,12 @@ function preferredClefLayout(pitches) {
   return { mode: 'grand' };
 }
 
-// Render two notes (interval) on a staff. Direction (up/down) is conveyed
-// purely by which note is higher. Always rendered as two separate beats so
-// they read as a sequence, not a simultaneous dyad.
-function renderTwoNoteStave(noteA, noteB, container) {
+// Render two notes (interval) on a staff. `articulation` controls layout:
+//   block    -> stacked as a dyad on one whole note
+//   arpeggio -> two separate half notes left-to-right (root first, then target)
+function renderTwoNoteStave(noteA, noteB, container, articulation = 'arpeggio') {
   container.replaceChildren();
   const VF = Vex.Flow;
-  const ns = state.notation;
   const layout = preferredClefLayout([noteA, noteB]);
   const width = 360;
   const height = layout.mode === 'grand' ? 220 : 150;
@@ -980,31 +979,85 @@ function renderTwoNoteStave(noteA, noteB, container) {
       if (accStr !== null) note.addModifier(new VF.Accidental(accStr), i);
     });
   };
+  const isBlock = articulation === 'block';
+
   if (layout.mode === 'single') {
     const clef = layout.clef;
     const stave = new VF.Stave(8, 18, width - 16);
     stave.addClef(clef);
     stave.setContext(ctx).draw();
-    const n1 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteA)], duration: 'h', auto_stem: true });
-    addAcc(n1, [noteA]);
-    const n2 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteB)], duration: 'h', auto_stem: true });
-    addAcc(n2, [noteB]);
+    let notes;
+    if (isBlock) {
+      // Stacked dyad — both pitches on a single whole note. VexFlow requires
+      // keys ordered low to high.
+      const lo = pitchSemitones(noteA) < pitchSemitones(noteB) ? noteA : noteB;
+      const hi = lo === noteA ? noteB : noteA;
+      const n = new VF.StaveNote({
+        clef, keys: [pitchToVexKey(lo), pitchToVexKey(hi)],
+        duration: 'w', auto_stem: true
+      });
+      addAcc(n, [lo, hi]);
+      notes = [n];
+    } else {
+      const n1 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteA)], duration: 'h', auto_stem: true });
+      addAcc(n1, [noteA]);
+      const n2 = new VF.StaveNote({ clef, keys: [pitchToVexKey(noteB)], duration: 'h', auto_stem: true });
+      addAcc(n2, [noteB]);
+      notes = [n1, n2];
+    }
     const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
-    voice.addTickables([n1, n2]);
+    voice.addTickables(notes);
     new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
     voice.draw(ctx, stave);
     return;
   }
-  // Grand staff: each note placed on its natural clef, in same time column.
+
+  // Grand staff path.
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
+  const clefA = clefForPitch(noteA);
+  const clefB = clefForPitch(noteB);
+  const restW = (clef) => new VF.StaveNote({ clef, keys: [clef === 'bass' ? 'd/3' : 'b/4'], duration: 'wr' });
+  const restH = (clef) => new VF.StaveNote({ clef, keys: [clef === 'bass' ? 'd/3' : 'b/4'], duration: 'hr' });
+
+  if (isBlock) {
+    // Both notes share the same time column. If they sit on the same clef,
+    // stack them as a dyad on that staff; otherwise put each on its own staff
+    // (one note per stave, paired with a whole rest on the other).
+    let trebleSlots, bassSlots;
+    if (clefA === clefB) {
+      const lo = pitchSemitones(noteA) < pitchSemitones(noteB) ? noteA : noteB;
+      const hi = lo === noteA ? noteB : noteA;
+      const dyad = new VF.StaveNote({
+        clef: clefA, keys: [pitchToVexKey(lo), pitchToVexKey(hi)],
+        duration: 'w', auto_stem: true
+      });
+      addAcc(dyad, [lo, hi]);
+      if (clefA === 'treble') { trebleSlots = [dyad]; bassSlots = [restW('bass')]; }
+      else                    { bassSlots = [dyad];   trebleSlots = [restW('treble')]; }
+    } else {
+      const nT = new VF.StaveNote({ clef: 'treble', keys: [pitchToVexKey(clefA === 'treble' ? noteA : noteB)], duration: 'w', auto_stem: true });
+      addAcc(nT, [clefA === 'treble' ? noteA : noteB]);
+      const nB = new VF.StaveNote({ clef: 'bass',   keys: [pitchToVexKey(clefA === 'bass'   ? noteA : noteB)], duration: 'w', auto_stem: true });
+      addAcc(nB, [clefA === 'bass'   ? noteA : noteB]);
+      trebleSlots = [nT]; bassSlots = [nB];
+    }
+    const tV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    const bV = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    tV.addTickables(trebleSlots);
+    bV.addTickables(bassSlots);
+    new VF.Formatter().joinVoices([tV, bV]).format([tV, bV], width - 100);
+    tV.draw(ctx, trebleStave);
+    bV.draw(ctx, bassStave);
+    return;
+  }
+
+  // Arpeggio across grand staff: each note placed on its natural clef,
+  // separated horizontally, opposite staff filled with a half rest.
   const slot = (pitch, clef) => {
     const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(pitch)], duration: 'h', auto_stem: true });
     addAcc(n, [pitch]);
     return n;
   };
-  const restH = (clef) => new VF.StaveNote({ clef, keys: [clef === 'bass' ? 'd/3' : 'b/4'], duration: 'hr' });
-  const clefA = clefForPitch(noteA);
-  const clefB = clefForPitch(noteB);
   const trebleSlots = [];
   const bassSlots = [];
   [{p: noteA, c: clefA}, {p: noteB, c: clefB}].forEach(({p, c}) => {

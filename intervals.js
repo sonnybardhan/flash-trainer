@@ -137,7 +137,15 @@ function revealIntervalName(card) {
 function renderIntervalCard(card) {
   $('card-notation').replaceChildren();
   $('card-answer-chips').replaceChildren();
-  renderTwoNoteStave(card.lowPitch, card.highPitch, $('card-notation'));
+  const articulation = resolveArticulation(state.notation.articulation);
+  // Block displays the interval as a stacked dyad; arpeggio shows the two
+  // pitches sequentially. Pass root-first ordering so direction (up/down) is
+  // visible in arpeggio mode.
+  if (articulation === 'block') {
+    renderTwoNoteStave(card.lowPitch, card.highPitch, $('card-notation'), 'block');
+  } else {
+    renderTwoNoteStave(card.rootPitch, card.targetPitch, $('card-notation'), 'arpeggio');
+  }
   revealIntervalName(card);
 }
 
