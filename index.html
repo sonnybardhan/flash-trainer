@@ -779,7 +779,7 @@
     </div>
   </div>
 
-  <!-- Display: mode toggle (chord label vs notation) -->
+  <!-- Display: chord label vs notation, plus notation-specific opts -->
   <div class="section">
     <div class="section-label">Display</div>
     <div class="panel">
@@ -788,6 +788,22 @@
         <div class="segment-control" id="format-segment">
           <div class="segment" data-format="text">Chord label</div>
           <div class="segment active" data-format="notation">Notation</div>
+        </div>
+      </div>
+      <div class="form-row" id="articulation-row">
+        <label>Articulation</label>
+        <div class="segment-control" id="articulation-segment">
+          <div class="segment active" data-articulation="block">Block</div>
+          <div class="segment" data-articulation="arpeggio">Arpeggio</div>
+          <div class="segment" data-articulation="mixed">Mixed</div>
+        </div>
+      </div>
+      <div class="form-row" id="arp-dir-row" style="display:none;">
+        <label>Direction</label>
+        <div class="segment-control" id="arp-dir-segment">
+          <div class="segment active" data-direction="up">Up</div>
+          <div class="segment" data-direction="down">Down</div>
+          <div class="segment" data-direction="mixed">Mixed</div>
         </div>
       </div>
     </div>
@@ -1169,6 +1185,15 @@ function themeColor() {
   return getComputedStyle(document.body).getPropertyValue('--text').trim() || '#000';
 }
 
+function resolveArticulation(setting) {
+  if (setting === 'mixed') return Math.random() < 0.5 ? 'block' : 'arpeggio';
+  return setting;
+}
+function resolveDirection(setting) {
+  if (setting === 'mixed') return Math.random() < 0.5 ? 'up' : 'down';
+  return setting;
+}
+
 function renderNotation(card, container) {
   container.replaceChildren();
   const ns = state.notation;
@@ -1183,8 +1208,12 @@ function renderNotation(card, container) {
     return;
   }
 
+  const articulation = resolveArticulation(ns.articulation);
+  const direction = resolveDirection(ns.arpeggioDirection);
+
   const VF = Vex.Flow;
-  const width = 280, height = 140;
+  const width = articulation === 'arpeggio' ? 320 : 280;
+  const height = 140;
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
   renderer.resize(width, height);
   const ctx = renderer.getContext();
@@ -1196,17 +1225,32 @@ function renderNotation(card, container) {
   stave.addClef(clef);
   stave.setContext(ctx).draw();
 
-  const keys = pitches.map(pitchToVexKey);
-  const note = new VF.StaveNote({ clef, keys, duration: 'w', auto_stem: true });
-  pitches.forEach((p, i) => {
-    const accStr = accidentalString(p.accidental);
-    if (accStr) note.addModifier(new VF.Accidental(accStr), i);
-  });
-
-  const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
-  voice.addTickables([note]);
-  new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
-  voice.draw(ctx, stave);
+  if (articulation === 'block') {
+    const note = new VF.StaveNote({ clef, keys: pitches.map(pitchToVexKey), duration: 'w', auto_stem: true });
+    pitches.forEach((p, i) => {
+      const accStr = accidentalString(p.accidental);
+      if (accStr) note.addModifier(new VF.Accidental(accStr), i);
+    });
+    const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    voice.addTickables([note]);
+    new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
+    voice.draw(ctx, stave);
+  } else {
+    // arpeggio: three eighth notes, monotonic, beamed
+    const ordered = direction === 'down' ? [...pitches].reverse() : pitches;
+    const notes = ordered.map(p => {
+      const n = new VF.StaveNote({ clef, keys: [pitchToVexKey(p)], duration: '8', auto_stem: true });
+      const accStr = accidentalString(p.accidental);
+      if (accStr) n.addModifier(new VF.Accidental(accStr), 0);
+      return n;
+    });
+    const voice = new VF.Voice({ num_beats: 3, beat_value: 8 });
+    voice.addTickables(notes);
+    new VF.Formatter().joinVoices([voice]).format([voice], width - 80);
+    voice.draw(ctx, stave);
+    const beams = VF.Beam.generateBeams(notes);
+    beams.forEach(b => b.setContext(ctx).draw());
+  }
 }
 
 // ============================================================
@@ -1623,21 +1667,51 @@ $('meter-select').addEventListener('change', (e) => {
 });
 
 // Display mode (text vs notation) toggle
+function setActiveSegment(segmentId, attr, value) {
+  document.querySelectorAll(`#${segmentId} .segment`).forEach(s => {
+    s.classList.toggle('active', s.dataset[attr] === value);
+  });
+}
+function updateNotationRowVisibility() {
+  $('articulation-row').style.display = state.notation.format === 'notation' ? 'flex' : 'none';
+  const showDir = state.notation.format === 'notation' &&
+                  state.notation.articulation !== 'block';
+  $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
+}
+function rerenderCurrentCard() {
+  if (state.session && state.session.lastCard) {
+    const fc = $('flash-card');
+    fc.classList.toggle('format-notation', state.notation.format === 'notation');
+    fc.classList.toggle('format-text', state.notation.format === 'text');
+    if (state.notation.format === 'notation') {
+      renderNotation(state.session.lastCard, $('card-notation'));
+    } else {
+      $('card-notation').replaceChildren();
+    }
+  }
+}
 $('format-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
   if (!seg) return;
-  const fmt = seg.dataset.format;
-  state.notation.format = fmt;
-  document.querySelectorAll('#format-segment .segment').forEach(s => {
-    s.classList.toggle('active', s.dataset.format === fmt);
-  });
-  const fc = $('flash-card');
-  fc.classList.toggle('format-notation', fmt === 'notation');
-  fc.classList.toggle('format-text', fmt === 'text');
-  if (state.session && state.session.lastCard) {
-    if (fmt === 'notation') renderNotation(state.session.lastCard, $('card-notation'));
-    else $('card-notation').replaceChildren();
-  }
+  state.notation.format = seg.dataset.format;
+  setActiveSegment('format-segment', 'format', state.notation.format);
+  updateNotationRowVisibility();
+  rerenderCurrentCard();
+});
+$('articulation-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.articulation = seg.dataset.articulation;
+  setActiveSegment('articulation-segment', 'articulation', state.notation.articulation);
+  updateNotationRowVisibility();
+  rerenderCurrentCard();
+});
+$('arp-dir-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.arpeggioDirection = seg.dataset.direction;
+  setActiveSegment('arp-dir-segment', 'direction', state.notation.arpeggioDirection);
+  rerenderCurrentCard();
 });
 
 $('add-focus-btn').addEventListener('click', () => {
@@ -2131,6 +2205,7 @@ $('accent-switch').classList.toggle('on', state.metronome.accent);
 $('bpm-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('meter-row').style.display = state.metronome.enabled ? 'flex' : 'none';
 $('accent-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+updateNotationRowVisibility();
 
 // First-use heuristic: if history is empty, open Metronome + Focus by default
 const historyExists = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length > 0;
