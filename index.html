@@ -2055,7 +2055,19 @@ $('mode-select').addEventListener('change', (e) => {
   $('count-stepper').style.display = e.target.value === 'count' ? 'flex' : 'none';
   $('time-stepper').style.display = e.target.value === 'time' ? 'flex' : 'none';
 });
-$('advance-select').addEventListener('change', () => { updateAdvanceUI(); updateCollapseMeta(); });
+$('advance-select').addEventListener('change', () => {
+  const val = $('advance-select').value;
+  // Beats/bars advance has no meaning without the metronome — auto-enable it.
+  if ((val === 'beats' || val === 'bars') && !state.metronome.enabled) {
+    state.metronome.enabled = true;
+    $('metro-switch').classList.add('on');
+    $('bpm-row').style.display = 'flex';
+    $('meter-row').style.display = 'flex';
+    $('accent-row').style.display = 'flex';
+  }
+  updateAdvanceUI();
+  updateCollapseMeta();
+});
 
 function updateAdvanceUI() {
   const val = $('advance-select').value;
