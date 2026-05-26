@@ -109,15 +109,49 @@ function applyEQ() {
   _master.gain.setTargetAtTime(preset.gain, t, 0.02);
 }
 
+// Wait for every zone in a preset to have its decoded AudioBuffer populated.
+// adjustPreset() kicks off audioContext.decodeAudioData per zone asynchronously
+// and returns immediately; if we schedule notes before those decodes finish,
+// WebAudioFont logs "empty buffer" and plays nothing. Without this poll the
+// first card after a fresh load would always be silent.
+function _waitForPresetReady(preset, timeoutMs = 6000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    const tick = () => {
+      if (preset && preset.zones && preset.zones.every(z => z.buffer)) {
+        resolve(); return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        console.warn('[sound] preset decode timed out; some notes may not sound');
+        resolve(); return;
+      }
+      setTimeout(tick, 30);
+    };
+    tick();
+  });
+}
+
+// Per-preset readiness cache so two simultaneous playChord calls for the
+// same preset both await the same decoding pass instead of double-adjusting.
+const _presetReadyPromises = {};
+
 async function _ensurePreset(presetId) {
   if (!PIANO_PRESETS[presetId]) presetId = DEFAULT_PRESET_ID;
   await _loadPlayerScript();
   await ensureAudioContext();
   if (!_player) _player = new WebAudioFontPlayer();
   _buildOutputChain();
+
   if (_activePresetId !== presetId) {
-    const preset = await _loadPresetScript(presetId);
-    _player.adjustPreset(audioCtx, preset);
+    if (!_presetReadyPromises[presetId]) {
+      _presetReadyPromises[presetId] = (async () => {
+        const preset = await _loadPresetScript(presetId);
+        _player.adjustPreset(audioCtx, preset);
+        await _waitForPresetReady(preset);
+        return preset;
+      })();
+    }
+    const preset = await _presetReadyPromises[presetId];
     _activePresetData = preset;
     _activePresetId = presetId;
   }
