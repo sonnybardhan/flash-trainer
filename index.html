@@ -584,7 +584,7 @@
   .range-open-btn:hover { border-color: var(--border-strong); }
   .range-open-chevron { color: var(--text-faint); font-size: 14px; }
 
-  .range-modal { max-width: 680px; width: calc(100vw - 32px); }
+  .range-modal { max-width: 880px; width: calc(100vw - 32px); }
   .range-modal-hint {
     font-family: var(--mono); font-size: 10px;
     color: var(--text-faint); letter-spacing: 1px;
@@ -593,12 +593,11 @@
   .range-picker-stage {
     background: var(--surface-2);
     border-radius: 8px;
-    padding: 18px 12px;
+    padding: 28px 18px;
     overflow-x: auto;
     overflow-y: hidden;
     display: flex;
     justify-content: center;
-    min-height: 200px;
   }
   .range-picker-bounds {
     font-family: var(--mono); font-size: 13px; color: var(--text);
@@ -606,15 +605,20 @@
     min-height: 1.4em;
   }
   .range-picker-bounds.error { color: var(--danger); letter-spacing: 1px; }
+  .range-picker-hover {
+    font-family: var(--mono); font-size: 11px; color: var(--text-faint);
+    letter-spacing: 2px; text-align: center; margin-top: 4px;
+    min-height: 1.2em; text-transform: uppercase;
+  }
   .range-picker-actions {
     display: flex; justify-content: space-between; gap: 8px;
-    margin-top: 12px;
+    margin-top: 16px;
   }
+  .range-picker-actions .chip { padding: 10px 16px; font-size: 13px; }
   .range-picker-stage svg { display: block; }
   .range-picker-stage .range-hit { cursor: pointer; fill: transparent; }
   .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.10; }
   .range-picker-stage .range-band { fill: var(--accent); fill-opacity: 0.12; pointer-events: none; }
-  .range-picker-stage .range-pending-band { fill: var(--accent); fill-opacity: 0.08; pointer-events: none; }
   .range-picker-stage .range-bound-note,
   .range-picker-stage .range-pending-note { pointer-events: none; }
   .range-picker-stage .range-pending-note { opacity: 0.55; }
@@ -1143,9 +1147,10 @@
     <div class="range-modal-hint" id="range-modal-hint">Tap two pitches on the staff to set the range. The wider tap becomes the high bound, the narrower becomes the low.</div>
     <div class="range-picker-stage" id="range-picker-stage"></div>
     <div class="range-picker-bounds" id="range-picker-bounds">C4 – A5</div>
+    <div class="range-picker-hover" id="range-picker-hover"></div>
     <div class="range-picker-actions">
-      <button class="modal-btn-secondary" id="range-modal-reset">Reset to default</button>
-      <button class="modal-btn-primary" id="range-modal-close">Done</button>
+      <button class="chip" id="range-modal-reset">Reset to default</button>
+      <button class="chip active" id="range-modal-close">Done</button>
     </div>
   </div>
 </div>
@@ -2368,9 +2373,16 @@ function renderRangePicker() {
   const { trebleRange, bassRange } = pickerVisibleFor(ns.hand);
   const VF = Vex.Flow;
 
-  const width = 580;
+  const spacing = 16; // staff line spacing in px (bigger than the default 10)
+  const width = 760;
   const isGrand = trebleRange && bassRange;
-  const height = isGrand ? 240 : 150;
+  // Each stave takes 4 * spacing for the lines, plus padding for ledgers above/below.
+  const ledgerPad = spacing * 4; // room for ~4 ledger positions on each side
+  const staveH = spacing * 4 + 2;
+  const staveGap = spacing * 5;  // vertical gap between staves on grand staff
+  const height = isGrand
+    ? ledgerPad + staveH + staveGap + staveH + ledgerPad
+    : ledgerPad + staveH + ledgerPad;
 
   const renderer = new VF.Renderer(stage, VF.Renderer.Backends.SVG);
   renderer.resize(width, height);
@@ -2380,13 +2392,16 @@ function renderRangePicker() {
   ctx.setFillStyle(color);
   ctx.setStrokeStyle(color);
 
+  const staveOpts = { spacing_between_lines_px: spacing };
   let trebleStave = null, bassStave = null;
   if (trebleRange) {
-    trebleStave = new VF.Stave(12, isGrand ? 14 : 24, width - 24);
+    const y = ledgerPad;
+    trebleStave = new VF.Stave(16, y, width - 32, staveOpts);
     trebleStave.addClef('treble').setContext(ctx).draw();
   }
   if (bassRange) {
-    bassStave = new VF.Stave(12, isGrand ? 116 : 24, width - 24);
+    const y = isGrand ? ledgerPad + staveH + staveGap : ledgerPad;
+    bassStave = new VF.Stave(16, y, width - 32, staveOpts);
     bassStave.addClef('bass').setContext(ctx).draw();
   }
   if (isGrand) {
@@ -2396,15 +2411,10 @@ function renderRangePicker() {
 
   const svg = stage.querySelector('svg');
 
-  const loSemi = pitchSemitones(parsePitchName(ns.rangeLow));
-  const hiSemi = pitchSemitones(parsePitchName(ns.rangeHigh));
-  const pendingSemi = pickerFirstTap ? pitchSemitones(parsePitchName(pickerFirstTap)) : null;
-
-  // Compute Y for each pitch on the appropriate stave.
-  function pitchY(pitch) {
+  // Compute Y + owning stave for any pitch.
+  function pitchInfo(pitch) {
     const semi = pitchSemitones(parsePitchName(pitch));
     if (isGrand) {
-      // Middle C threshold splits the staves; C4 itself uses the treble stave's first ledger below.
       const useTreble = semi >= pitchSemitones(parsePitchName('C4'));
       const stave = useTreble ? trebleStave : bassStave;
       const clef = useTreble ? 'treble' : 'bass';
@@ -2414,49 +2424,46 @@ function renderRangePicker() {
     return { y: bassStave.getYForLine(pitchToLineFromTop(pitch, 'bass')), stave: bassStave };
   }
 
-  // Range highlight bands (current bounds + pending tap if any).
-  function drawBand(lo, hi, className) {
-    const loInfo = pitchY(lo);
-    const hiInfo = pitchY(hi);
-    // Need an x range — full inside of the staves below cleft.
-    const xStart = 60;
-    const xEnd = width - 18;
-    // Band can span both staves on a grand staff; use bounding y across both info.
-    const minY = Math.min(loInfo.y, hiInfo.y) - 7;
-    const maxY = Math.max(loInfo.y, hiInfo.y) + 7;
+  // Highlight band between current bounds.
+  const xStart = 80;            // just past the clef glyph
+  const xEnd = width - 24;
+  const chordX = (xStart + xEnd) / 2;  // single x for stacked bound noteheads
+  if (!pickerError) {
+    const loInfo = pitchInfo(ns.rangeLow);
+    const hiInfo = pitchInfo(ns.rangeHigh);
+    const minY = Math.min(loInfo.y, hiInfo.y) - spacing * 0.5;
+    const maxY = Math.max(loInfo.y, hiInfo.y) + spacing * 0.5;
     svg.appendChild(svgEl('rect', {
-      x: xStart, y: minY, width: xEnd - xStart, height: maxY - minY, class: className
+      x: xStart, y: minY, width: xEnd - xStart, height: maxY - minY, class: 'range-band'
     }));
   }
-  if (!pickerError) drawBand(ns.rangeLow, ns.rangeHigh, 'range-band');
 
-  // Bound noteheads.
-  const drawBoundAt = (pitch, x, className) => {
-    const info = pitchY(pitch);
-    drawNotehead(svg, x, info.y, info.stave, color, className);
-  };
-  drawBoundAt(ns.rangeLow, 120, 'range-bound-note');
-  drawBoundAt(ns.rangeHigh, width - 80, 'range-bound-note');
+  // Bound noteheads — stacked at the same x like a block chord.
+  const lowInfo = pitchInfo(ns.rangeLow);
+  const highInfo = pitchInfo(ns.rangeHigh);
+  drawNotehead(svg, chordX, lowInfo.y, lowInfo.stave, color, 'range-bound-note');
+  drawNotehead(svg, chordX, highInfo.y, highInfo.stave, color, 'range-bound-note');
 
-  // Pending tap notehead.
+  // Pending tap notehead (slight horizontal offset so it doesn't overlap a bound).
   if (pickerFirstTap) {
-    const info = pitchY(pickerFirstTap);
-    drawNotehead(svg, width / 2, info.y, info.stave, accent, 'range-pending-note', 0.85);
+    const info = pitchInfo(pickerFirstTap);
+    drawNotehead(svg, chordX + spacing * 1.1, info.y, info.stave, accent, 'range-pending-note', 0.85);
   }
 
-  // Hit zones — one per pitch on each visible stave. Cover the full
-  // stave width and a half-line of vertical room around the pitch.
+  // Hit zones + hover handlers.
   function addHits(pitches, stave, clef) {
     if (!pitches) return;
-    const spacing = (stave.getYForLine(4) - stave.getYForLine(0)) / 4;
-    const hitH = spacing * 0.6;
+    const hitH = spacing * 0.95;
     for (const pitch of pitches) {
       const y = stave.getYForLine(pitchToLineFromTop(pitch, clef));
       const rect = svgEl('rect', {
-        x: 60, y: y - hitH / 2, width: width - 78, height: hitH,
+        x: xStart - 20, y: y - hitH / 2,
+        width: xEnd - xStart + 40, height: hitH,
         class: 'range-hit'
       });
       rect.addEventListener('click', () => handleRangeTap(pitch));
+      rect.addEventListener('mouseenter', () => { $('range-picker-hover').textContent = pitch; });
+      rect.addEventListener('mouseleave', () => { $('range-picker-hover').textContent = ''; });
       svg.appendChild(rect);
     }
   }
@@ -2527,6 +2534,7 @@ function resetRangeToDefault() {
 function openRangeModal() {
   pickerFirstTap = null;
   pickerError = null;
+  $('range-picker-hover').textContent = '';
   updateRangeCurrentLabel();
   renderRangePicker();
   $('range-modal-backdrop').classList.add('active');
