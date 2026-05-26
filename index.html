@@ -547,6 +547,27 @@
   }
   .card-focus-badge.empty { display: none; }
 
+  .card-name-overlay {
+    font-family: var(--serif);
+    font-size: clamp(28px, 6vw, 40px);
+    font-weight: 300;
+    letter-spacing: -0.3px;
+    color: var(--text);
+    margin-bottom: 8px;
+    min-height: 1.1em;
+    text-align: center;
+  }
+  .card-name-overlay sup.figured, .card-name-overlay sub.figured {
+    font-size: 0.5em;
+    font-family: var(--serif);
+    font-weight: 300;
+    line-height: 1;
+  }
+  .card-name-overlay sup.figured { vertical-align: top; }
+  .card-name-overlay sub.figured { vertical-align: bottom; margin-left: -0.2em; }
+  .flash-card.format-text .card-name-overlay { display: none; }
+  .flash-card.name-hidden .card-name-overlay { visibility: hidden; }
+
   .card-notation {
     margin-top: 28px;
     width: 100%;
@@ -858,6 +879,14 @@
           <div class="segment" data-label-style="figured">Figured</div>
         </div>
       </div>
+      <div class="form-row" id="show-name-row">
+        <label>Show chord name</label>
+        <div class="segment-control" id="show-name-segment">
+          <div class="segment" data-show-name="off">Off</div>
+          <div class="segment active" data-show-name="tapToReveal">Tap</div>
+          <div class="segment" data-show-name="always">Always</div>
+        </div>
+      </div>
       <div class="form-row" id="range-low-row">
         <label>Range low</label>
         <select id="range-low-select"></select>
@@ -1013,6 +1042,7 @@
     <div class="card-quality" id="card-quality">major</div>
     <div class="card-inversion" id="card-inversion">root position</div>
     <div class="card-focus-badge empty" id="card-focus-badge"></div>
+    <div class="card-name-overlay" id="card-name-overlay"></div>
     <div class="card-notation" id="card-notation"></div>
   </div>
   <div class="flash-footer">
@@ -2047,6 +2077,7 @@ function updateNotationRowVisibility() {
   $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
   $('range-low-row').style.display = isNotation ? 'flex' : 'none';
   $('range-high-row').style.display = isNotation ? 'flex' : 'none';
+  $('show-name-row').style.display = isNotation ? 'flex' : 'none';
   // Double root only meaningful in Both + Closed.
   const showDoubleRoot = isNotation && ns.hand === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
@@ -2100,6 +2131,7 @@ function applyNotationSettingsToUI() {
   setActiveSegment('arp-dir-segment', 'direction', ns.arpeggioDirection);
   setActiveSegment('accidentals-segment', 'accidentals', ns.accidentals);
   setActiveSegment('label-style-segment', 'labelStyle', ns.labelStyle);
+  setActiveSegment('show-name-segment', 'showName', ns.showName);
   $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
   populateRangeSelects();
@@ -2115,6 +2147,7 @@ function rerenderCurrentCard() {
     } else {
       $('card-notation').replaceChildren();
     }
+    renderChordNameOverlay(state.session.lastCard);
   }
 }
 $('format-segment').addEventListener('click', (e) => {
@@ -2201,7 +2234,24 @@ $('label-style-segment').addEventListener('click', (e) => {
   if (!seg) return;
   state.notation.labelStyle = seg.dataset.labelStyle;
   setActiveSegment('label-style-segment', 'labelStyle', state.notation.labelStyle);
-  if (state.session && state.session.lastCard) renderChordLabel(state.session.lastCard);
+  if (state.session && state.session.lastCard) {
+    renderChordLabel(state.session.lastCard);
+    renderChordNameOverlay(state.session.lastCard);
+  }
+  saveNotationSettings();
+});
+$('show-name-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.showName = seg.dataset.showName;
+  setActiveSegment('show-name-segment', 'showName', state.notation.showName);
+  if (state.session && state.session.lastCard) {
+    // If switching away from tap-to-reveal, drop the per-card reveal flag.
+    if (state.notation.showName !== 'tapToReveal') {
+      delete state.session.lastCard.nameRevealed;
+    }
+    renderChordNameOverlay(state.session.lastCard);
+  }
   saveNotationSettings();
 });
 $('range-low-select').addEventListener('change', (e) => {
@@ -2278,6 +2328,26 @@ function nextCard() {
   }
 }
 
+// Build the chord-name HTML for the active label style. Returns a string
+// suitable for innerHTML on a label container.
+function buildChordLabelHTML(card, style) {
+  const tones = chordTones(card.spelling, card.quality);
+  const suffix = QUALITY_SUFFIX[card.quality];
+  const rootHTML = formatSpellingDisplay(card.spelling);
+  if (style === 'slash') {
+    if (card.inversion === 'root') return `${rootHTML}${suffix}`;
+    const bassTone = card.inversion === '1st' ? tones[1] : tones[2];
+    return `${rootHTML}${suffix}/${toneToDisplayHTML(bassTone)}`;
+  }
+  if (style === 'figured') {
+    if (card.inversion === 'root') return `${rootHTML}${suffix}`;
+    if (card.inversion === '1st') return `${rootHTML}${suffix}<sup class="figured">6</sup>`;
+    return `${rootHTML}${suffix}<sup class="figured">6</sup><sub class="figured">4</sub>`;
+  }
+  // plain fallback: just root + 'm'/'°'/'+' (or nothing for major)
+  return `${rootHTML}${suffix}`;
+}
+
 function renderChordLabel(card) {
   const style = state.notation.labelStyle;
   const fc = $('flash-card');
@@ -2291,30 +2361,22 @@ function renderChordLabel(card) {
                                        card.inversion === '1st' ? 'first inversion' : 'second inversion';
     return;
   }
-
-  const tones = chordTones(card.spelling, card.quality);
-  const suffix = QUALITY_SUFFIX[card.quality];
-  const rootHTML = formatSpellingDisplay(card.spelling);
-  let html;
-  if (style === 'slash') {
-    if (card.inversion === 'root') {
-      html = `${rootHTML}${suffix}`;
-    } else {
-      const bassTone = card.inversion === '1st' ? tones[1] : tones[2];
-      html = `${rootHTML}${suffix}/${toneToDisplayHTML(bassTone)}`;
-    }
-  } else { // figured
-    if (card.inversion === 'root') {
-      html = `${rootHTML}${suffix}`;
-    } else if (card.inversion === '1st') {
-      html = `${rootHTML}${suffix}<sup class="figured">6</sup>`;
-    } else {
-      html = `${rootHTML}${suffix}<sup class="figured">6</sup><sub class="figured">4</sub>`;
-    }
-  }
-  $('card-root').innerHTML = html;
+  $('card-root').innerHTML = buildChordLabelHTML(card, style);
   $('card-quality').textContent = '';
   $('card-inversion').textContent = '';
+}
+
+function renderChordNameOverlay(card) {
+  const ns = state.notation;
+  const fc = $('flash-card');
+  if (ns.format !== 'notation' || ns.showName === 'off') {
+    $('card-name-overlay').textContent = '';
+    fc.classList.add('name-hidden');
+    return;
+  }
+  $('card-name-overlay').innerHTML = buildChordLabelHTML(card, ns.labelStyle);
+  const shouldShow = ns.showName === 'always' || card.nameRevealed === true;
+  fc.classList.toggle('name-hidden', !shouldShow);
 }
 
 function renderCard(card) {
@@ -2337,6 +2399,7 @@ function renderCard(card) {
   } else {
     $('card-notation').replaceChildren();
   }
+  renderChordNameOverlay(card);
   fc.classList.remove('transition');
   void fc.offsetWidth;
   fc.classList.add('transition');
@@ -2540,9 +2603,17 @@ function startAutoAdvance() {
 }
 
 $('flash-card').addEventListener('click', () => {
-  if (state.session && state.session.advance === 'manual' && !state.session.pauseStartedAt) {
-    nextCard();
+  const s = state.session;
+  if (!s || s.pauseStartedAt) return;
+  const ns = state.notation;
+  // Tap-to-reveal: in notation mode, first tap reveals the name; in manual
+  // advance the second tap advances. In time-based advance, tap only reveals.
+  if (ns.format === 'notation' && ns.showName === 'tapToReveal' && s.lastCard && !s.lastCard.nameRevealed) {
+    s.lastCard.nameRevealed = true;
+    renderChordNameOverlay(s.lastCard);
+    return;
   }
+  if (s.advance === 'manual') nextCard();
 });
 
 // ============================================================
