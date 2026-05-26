@@ -123,11 +123,18 @@ async function _ensurePreset(presetId) {
   }
 }
 
-// Preload — called when the toggle flips on or when a different preset
-// is picked, so the next card is ready without first-time lag.
+// Preload — called when the toggle flips on or when a different preset is
+// picked, so the next card is ready without first-time lag.
+//
+// IMPORTANT: only loads the JS scripts. Does NOT touch AudioContext —
+// creating an AudioContext outside a user gesture trips Chrome/Safari's
+// autoplay policy and the context gets stuck unable to resume. The first
+// playChord/previewChord call (always triggered by a click) is what
+// actually instantiates and resumes the AudioContext.
 function prefetchPianoEngine() {
   const id = (state.notation && state.notation.pianoPreset) || DEFAULT_PRESET_ID;
-  _ensurePreset(id).catch(e => console.warn('[sound] prefetch failed', e));
+  _loadPlayerScript().catch(e => console.warn('[sound] player load failed', e));
+  _loadPresetScript(id).catch(e => console.warn('[sound] preset load failed', e));
 }
 
 // Pitch object {letter, accidental, octave} -> MIDI note number.
