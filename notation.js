@@ -921,3 +921,38 @@ function renderChordNameOverlay(card) {
   const shouldShow = ns.showName === 'always' || card.nameRevealed === true;
   fc.classList.toggle('name-hidden', !shouldShow);
 }
+
+// ============================================================
+// Playback pitch computation
+// ============================================================
+// Returns the pitches that should sound for a card, based on the
+// current notation settings (clef, voicing, range). Used by the
+// optional piano playback regardless of whether the UI is showing
+// notation or the chord label — settings drive the voicing in both.
+//
+// Returns null if no octave placement fits the active range.
+function computePlaybackPitches(card) {
+  const ns = state.notation;
+  const isGrand = ns.clef === 'both';
+  const effectiveVoicing = resolveVoicing(card, ns.clef, ns.voicing);
+
+  if (!isGrand) {
+    const raw = placeChordInRange(card.spelling, card.quality, card.inversion,
+                                   ns.rangeLow, ns.rangeHigh);
+    if (!raw) return null;
+    return substituteAll(raw);
+  }
+
+  if (effectiveVoicing === 'open') {
+    const raw = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
+    if (!raw) return null;
+    return [...substituteAll(raw.bass), ...substituteAll(raw.treble)];
+  }
+
+  // Closed voicing on grand staff: pitches land on one clef.
+  const chordClef = resolveChordClef(card, ns.clef, 'closed') || 'treble';
+  const place = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
+  const raw = placeChordInRange(card.spelling, card.quality, card.inversion, place.lo, place.hi);
+  if (!raw) return null;
+  return substituteAll(raw);
+}

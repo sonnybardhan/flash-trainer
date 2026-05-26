@@ -63,7 +63,8 @@ const state = {
     rangeHigh: 'A5',
     showName: 'tapToReveal',     // off | afterDelay | tapToReveal | always
     labelStyle: 'plain',         // plain | slash | figured
-    unconventionalSpellings: false
+    unconventionalSpellings: false,
+    playSound: false             // piano audio on each card (lazy loads engine)
   }
 };
 
@@ -664,6 +665,8 @@ function applyNotationSettingsToUI() {
   setActiveSegment('show-name-segment', 'showName', ns.showName);
   $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
+  $('play-sound-switch').classList.toggle('on', ns.playSound);
+  if (ns.playSound) prefetchPianoEngine();
   updateRangeCurrentLabel();
   updateNotationRowVisibility();
 }
@@ -763,6 +766,12 @@ $('unconventional-switch').addEventListener('click', () => {
   rerenderCurrentCard();
   saveNotationSettings();
   markCustomIfActive();
+});
+$('play-sound-switch').addEventListener('click', () => {
+  state.notation.playSound = !state.notation.playSound;
+  $('play-sound-switch').classList.toggle('on', state.notation.playSound);
+  if (state.notation.playSound) prefetchPianoEngine();
+  saveNotationSettings();
 });
 $('label-style-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -908,6 +917,21 @@ function renderCard(card) {
   fc.classList.remove('transition');
   void fc.offsetWidth;
   fc.classList.add('transition');
+  triggerPlayback(card);
+}
+
+// Fire piano playback for the current card if the toggle is on.
+// Voicing uses the active notation settings even in chord-label mode.
+function triggerPlayback(card) {
+  const ns = state.notation;
+  if (!ns.playSound) return;
+  const pitches = computePlaybackPitches(card);
+  if (!pitches) return;
+  const articulation = resolveArticulation(ns.articulation);
+  const direction = resolveDirection(ns.arpeggioDirection);
+  const bpm = state.metronome.bpm || 80;
+  const meter = state.metronome.meter || 4;
+  playChord(pitches, { articulation, bpm, meter, direction });
 }
 
 // ============================================================
