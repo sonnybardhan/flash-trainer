@@ -533,7 +533,9 @@ function updateNotationRowVisibility() {
   const isNotation = ns.format === 'notation';
   $('clef-row').style.display = isNotation ? 'flex' : 'none';
   // Voicing only meaningful in Both (single-staff modes force Closed, §3.2).
-  $('voicing-row').style.display = isNotation && ns.clef === 'both' ? 'flex' : 'none';
+  // Surfaced whenever Clef=Both, even in chord-label mode, since voicing
+  // also drives playback pitches.
+  $('voicing-row').style.display = ns.clef === 'both' ? 'flex' : 'none';
   $('articulation-row').style.display = isNotation ? 'flex' : 'none';
   const showDir = isNotation && ns.articulation !== 'block';
   $('arp-dir-row').style.display = showDir ? 'flex' : 'none';
@@ -541,8 +543,9 @@ function updateNotationRowVisibility() {
   $('unconventional-row').style.display = isNotation ? 'flex' : 'none';
   $('range-row').style.display = isNotation ? 'flex' : 'none';
   $('show-name-row').style.display = isNotation ? 'flex' : 'none';
-  // Double root only meaningful in Both + Closed.
-  const showDoubleRoot = isNotation && ns.clef === 'both' && ns.voicing === 'closed';
+  // Double root in bass: visible when Clef=Both + Closed, regardless of
+  // display mode (also affects playback).
+  const showDoubleRoot = ns.clef === 'both' && ns.voicing === 'closed';
   $('double-root-row').style.display = showDoubleRoot ? 'flex' : 'none';
   // Label style applies to chord-label mode (and will apply to notation reveal later).
   $('label-style-row').style.display = !isNotation ? 'flex' : 'none';
