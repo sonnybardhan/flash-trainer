@@ -74,7 +74,7 @@
     </div>
   </div>
 
-  <!-- Key + chord (degree drill only) -->
+  <!-- Key + chord + scale (degree drill only) -->
   <div class="section drill-degrees-only" id="degree-config-section" style="display:none;">
     <div class="section-label">Key &amp; chord</div>
     <div class="panel">
@@ -82,14 +82,22 @@
         <label>Key</label>
         <select id="degree-key-select"></select>
       </div>
-      <div class="form-row" style="border-bottom:none;">
+      <div class="form-row">
         <label>Chord</label>
         <div class="segment-control" id="degree-quality-segment">
           <div class="segment" data-degree-quality="major">Major</div>
           <div class="segment" data-degree-quality="minor">Minor</div>
         </div>
       </div>
-      <div class="mode-hint">The chord plays once at the start of each session. Replay it any time with the ▶ button on the card.</div>
+      <div class="form-row">
+        <label>Scale</label>
+        <select id="degree-scale-select"></select>
+      </div>
+      <div class="form-row" style="border-bottom:none; padding-bottom: 6px;">
+        <label>Degrees</label>
+        <div class="degree-scale-chips-wrap"><div id="degree-scale-chips" class="degree-scale-chips"></div></div>
+      </div>
+      <div class="mode-hint">The chord plays once at the start of each session. Tap a degree to add or remove it; the scale switches to “Custom” when you deviate from a preset.</div>
     </div>
   </div>
 
@@ -378,6 +386,7 @@
     <div class="card-focus-badge empty" id="card-focus-badge"></div>
     <div class="card-name-overlay" id="card-name-overlay"></div>
     <div class="card-mode-tag" id="card-mode-tag"></div>
+    <button class="card-tone-replay" id="card-tone-replay" aria-label="Replay note">▶ note</button>
     <div class="card-notation" id="card-notation"></div>
     <div class="card-reveal-label" id="card-reveal-label"></div>
     <div class="card-answer-chips" id="card-answer-chips"></div>

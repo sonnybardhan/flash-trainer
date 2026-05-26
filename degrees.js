@@ -27,11 +27,13 @@ const DEGREE_DEFS = {
   'b7': { semitones: 10, letterSteps: 6,  label: '♭7' },
   '7':  { semitones: 11, letterSteps: 6,  label: '7' }
 };
-const DEGREES_FOR_MAJOR = ['1','2','3','4','5','6','7'];
-const DEGREES_FOR_MINOR = ['1','2','b3','4','5','b6','b7'];
+// Visual ordering for chips matches chromatic order so layouts stay stable
+// regardless of which scale the user picks.
+const DEGREE_VISUAL_ORDER = ['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'];
 
-function degreesForQuality(quality) {
-  return quality === 'minor' ? DEGREES_FOR_MINOR : DEGREES_FOR_MAJOR;
+function orderedDegrees(degreeSet) {
+  const s = new Set(degreeSet);
+  return DEGREE_VISUAL_ORDER.filter(d => s.has(d));
 }
 
 function computeDegreeTone(rootPitch, degreeId) {
@@ -57,13 +59,21 @@ function buildDegreeSessionAnchor() {
                  || placeChordInRange(key, quality, 'root', 'C3', 'C6');
   if (!triad) return null;
   const triadPitches = substituteAll(triad, { spelling: key, quality });
-  return { key, quality, triadPitches, rootPitch: triadPitches[0] };
+  // Snapshot the scale at session start so settings changes mid-session
+  // don't shift the drill pool unexpectedly.
+  const scaleDegrees = orderedDegrees(ns.degreeScaleDegrees && ns.degreeScaleDegrees.length
+                                       ? ns.degreeScaleDegrees
+                                       : ['1','2','3','4','5','6','7']);
+  return {
+    key, quality, triadPitches, rootPitch: triadPitches[0],
+    scaleDegrees, scaleMode: ns.degreeScaleMode || 'custom'
+  };
 }
 
 function buildDegreeCard() {
   const anchor = state.session && state.session.degreeAnchor;
   if (!anchor) return null;
-  const allowed = degreesForQuality(anchor.quality);
+  const allowed = anchor.scaleDegrees;
   const lastId = state.session.lastCard && state.session.lastCard.drill === 'degree'
     ? state.session.lastCard.degreeId : null;
   let pool = allowed;
@@ -74,6 +84,8 @@ function buildDegreeCard() {
     drill: 'degree',
     key: anchor.key,
     quality: anchor.quality,
+    scaleDegrees: anchor.scaleDegrees,
+    scaleMode: anchor.scaleMode,
     triadPitches: anchor.triadPitches,
     rootPitch: anchor.rootPitch,
     tonePitch,
@@ -83,11 +95,18 @@ function buildDegreeCard() {
   };
 }
 
+const _SCALE_LABELS_SHORT = {
+  ionian: 'Ionian', dorian: 'Dorian', phrygian: 'Phrygian',
+  lydian: 'Lydian', mixolydian: 'Mixolydian', aeolian: 'Aeolian',
+  locrian: 'Locrian', harmonicMinor: 'Harmonic min', melodicMinor: 'Melodic min',
+  majorPentatonic: 'Maj pent', minorPentatonic: 'Min pent',
+  blues: 'Blues', chromatic: 'Chromatic', custom: 'Custom'
+};
+
 function renderDegreeAnswerChips(card) {
   const c = $('card-answer-chips');
   c.replaceChildren();
-  const allowed = degreesForQuality(card.quality);
-  allowed.forEach(id => {
+  card.scaleDegrees.forEach(id => {
     const b = document.createElement('button');
     b.className = 'answer-chip';
     b.dataset.degreeId = id;
@@ -145,7 +164,8 @@ function renderDegreeCard(card) {
   $('card-notation').replaceChildren();
   $('card-answer-chips').replaceChildren();
   const tag = $('card-mode-tag');
-  tag.textContent = `${_formatKey(card.key)} ${_qualityWord(card.quality)}`;
+  const scaleLabel = _SCALE_LABELS_SHORT[card.scaleMode] || 'Custom';
+  tag.textContent = `${_formatKey(card.key)} ${_qualityWord(card.quality)} · ${scaleLabel}`;
   renderDegreeAnswerChips(card);
   const label = $('card-reveal-label');
   label.textContent = '';

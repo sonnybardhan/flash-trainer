@@ -56,6 +56,8 @@ const state = {
     intervalSelection: ['m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7'],
     degreeKey: 'C',              // single root spelling (e.g. 'C', 'F#', 'Bb')
     degreeChordQuality: 'major', // major | minor
+    degreeScaleMode: 'ionian',   // see SCALE_PRESETS below; 'custom' when user-edited
+    degreeScaleDegrees: ['1','2','3','4','5','6','7'],
     format: 'notation',          // text | notation | both
     clef: 'treble',              // treble | bass | both
     voicing: 'closed',           // closed | open | mixed
@@ -768,10 +770,46 @@ function renderIntervalChips() {
   });
 }
 
-// Degree-drill: single-key select + chord-quality segment.
+// Degree-drill: single-key select + chord-quality segment + scale picker.
 const DEGREE_KEY_OPTIONS = [
   'C','C#','Db','D','Eb','E','F','F#','Gb','G','G#','Ab','A','Bb','B'
 ];
+// Scale presets — each maps to a set of chromatic degree IDs. 'custom' is
+// inferred (not in this map); used when the user-edited set matches no preset.
+const SCALE_PRESETS = {
+  ionian:           { label: 'Ionian (major)',    degrees: ['1','2','3','4','5','6','7'] },
+  dorian:           { label: 'Dorian',            degrees: ['1','2','b3','4','5','6','b7'] },
+  phrygian:         { label: 'Phrygian',          degrees: ['1','b2','b3','4','5','b6','b7'] },
+  lydian:           { label: 'Lydian',            degrees: ['1','2','3','#4','5','6','7'] },
+  mixolydian:       { label: 'Mixolydian',        degrees: ['1','2','3','4','5','6','b7'] },
+  aeolian:          { label: 'Aeolian (minor)',   degrees: ['1','2','b3','4','5','b6','b7'] },
+  locrian:          { label: 'Locrian',           degrees: ['1','b2','b3','4','#4','b6','b7'] },
+  harmonicMinor:    { label: 'Harmonic minor',    degrees: ['1','2','b3','4','5','b6','7'] },
+  melodicMinor:     { label: 'Melodic minor',     degrees: ['1','2','b3','4','5','6','7'] },
+  majorPentatonic:  { label: 'Major pentatonic',  degrees: ['1','2','3','5','6'] },
+  minorPentatonic:  { label: 'Minor pentatonic',  degrees: ['1','b3','4','5','b7'] },
+  blues:            { label: 'Blues',             degrees: ['1','b3','4','#4','5','b7'] },
+  chromatic:        { label: 'Chromatic',         degrees: ['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'] }
+};
+const DEGREE_CHIP_ORDER = ['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'];
+const DEGREE_CHIP_LABELS = {
+  '1':'1', 'b2':'♭2', '2':'2', 'b3':'♭3', '3':'3', '4':'4',
+  '#4':'♯4', '5':'5', 'b6':'♭6', '6':'6', 'b7':'♭7', '7':'7'
+};
+
+function _sameDegreeSet(a, b) {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a), sb = new Set(b);
+  for (const x of sa) if (!sb.has(x)) return false;
+  return true;
+}
+function detectScaleMode(degrees) {
+  for (const [id, def] of Object.entries(SCALE_PRESETS)) {
+    if (_sameDegreeSet(degrees, def.degrees)) return id;
+  }
+  return 'custom';
+}
+
 function populateDegreeKeySelect() {
   const sel = $('degree-key-select');
   if (!sel || sel.options.length) return;
@@ -781,11 +819,52 @@ function populateDegreeKeySelect() {
     sel.appendChild(o);
   });
 }
+function populateDegreeScaleSelect() {
+  const sel = $('degree-scale-select');
+  if (!sel || sel.options.length) return;
+  for (const [id, def] of Object.entries(SCALE_PRESETS)) {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = def.label;
+    sel.appendChild(o);
+  }
+  const cust = document.createElement('option');
+  cust.value = 'custom'; cust.textContent = 'Custom';
+  sel.appendChild(cust);
+}
+function renderDegreeScaleChips() {
+  const c = $('degree-scale-chips');
+  if (!c) return;
+  c.replaceChildren();
+  const active = new Set(state.notation.degreeScaleDegrees || []);
+  DEGREE_CHIP_ORDER.forEach(id => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (active.has(id) ? ' active' : '');
+    b.textContent = DEGREE_CHIP_LABELS[id];
+    b.onclick = () => {
+      const set = new Set(state.notation.degreeScaleDegrees || []);
+      if (set.has(id)) {
+        if (set.size === 1) return; // keep at least one degree
+        set.delete(id);
+      } else {
+        set.add(id);
+      }
+      state.notation.degreeScaleDegrees = DEGREE_CHIP_ORDER.filter(d => set.has(d));
+      state.notation.degreeScaleMode = detectScaleMode(state.notation.degreeScaleDegrees);
+      $('degree-scale-select').value = state.notation.degreeScaleMode;
+      saveNotationSettings();
+      renderDegreeScaleChips();
+    };
+    c.appendChild(b);
+  });
+}
 function applyDegreeConfigToUI() {
   populateDegreeKeySelect();
+  populateDegreeScaleSelect();
   $('degree-key-select').value = state.notation.degreeKey || 'C';
   setActiveSegment('degree-quality-segment', 'degreeQuality',
                     state.notation.degreeChordQuality || 'major');
+  $('degree-scale-select').value = state.notation.degreeScaleMode || 'ionian';
+  renderDegreeScaleChips();
 }
 
 function populatePianoPresetSelect() {
@@ -861,7 +940,7 @@ $('interval-presets').addEventListener('click', (e) => {
   saveNotationSettings();
 });
 
-// Degree drill: key select + quality segment.
+// Degree drill: key select + quality segment + scale picker.
 $('degree-key-select').addEventListener('change', (e) => {
   state.notation.degreeKey = e.target.value;
   saveNotationSettings();
@@ -873,6 +952,29 @@ $('degree-quality-segment').addEventListener('click', (e) => {
   setActiveSegment('degree-quality-segment', 'degreeQuality',
                     state.notation.degreeChordQuality);
   saveNotationSettings();
+});
+$('degree-scale-select').addEventListener('change', (e) => {
+  const id = e.target.value;
+  const preset = SCALE_PRESETS[id];
+  if (!preset) {
+    // 'custom' — leave degrees alone, just mark mode.
+    state.notation.degreeScaleMode = 'custom';
+  } else {
+    state.notation.degreeScaleMode = id;
+    state.notation.degreeScaleDegrees = [...preset.degrees];
+  }
+  saveNotationSettings();
+  renderDegreeScaleChips();
+});
+// Card-level "play note" button — degree drill only.
+$('card-tone-replay').addEventListener('click', async (e) => {
+  e.stopPropagation(); // don't bubble to .flash-card (which would advance for chord drill)
+  if (!state.session || !state.session.lastCard) return;
+  const card = state.session.lastCard;
+  if (card.drill !== 'degree') return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  await playDegreeTone(card);
 });
 $('articulation-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -1451,6 +1553,15 @@ $('start-btn').addEventListener('click', () => {
       showModal({
         title: 'Pick a key and chord',
         body: 'Choose a key and major or minor chord for the degree drill.',
+        actions: [{ label: 'OK', kind: 'primary' }]
+      });
+      return;
+    }
+    if (!Array.isArray(state.notation.degreeScaleDegrees) ||
+        state.notation.degreeScaleDegrees.length === 0) {
+      showModal({
+        title: 'Pick at least one degree',
+        body: 'The degree drill needs at least one scale degree selected.',
         actions: [{ label: 'OK', kind: 'primary' }]
       });
       return;

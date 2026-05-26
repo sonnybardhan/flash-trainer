@@ -271,6 +271,16 @@
     color: var(--text-faint); letter-spacing: 0.5px;
   }
 
+  /* Degree drill — scale chips (multi-select 12 chromatic degrees). */
+  .degree-scale-chips-wrap { flex: 1; }
+  .degree-scale-chips {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  .degree-scale-chips .chip {
+    padding: 8px 4px; font-size: 12px; min-width: 0;
+  }
+
   /* ================= SIDE-BY-SIDE ================= */
   .two-col {
     display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
@@ -796,6 +806,23 @@
   .badge-high { background: var(--badge-hi-bg); color: var(--badge-hi-fg); border: 1px solid var(--badge-hi-bd); }
 
   /* ================ Interval / Degree drill UI ================ */
+  /* Tone replay button — centered on the card under the chord tag, degree drill only. */
+  .card-tone-replay {
+    display: none;
+    margin: 10px auto 0;
+    padding: 9px 22px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    font-family: var(--mono); font-size: 12px;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.12s, background 0.18s;
+  }
+  .card-tone-replay:active { transform: scale(0.96); }
+  .card-tone-replay:hover { background: var(--surface); }
+  .flash-card.drill-degrees .card-tone-replay { display: inline-block; }
+
   /* Mode/chord tag shown above notation in degree drill */
   .card-mode-tag {
     font-family: var(--mono);
