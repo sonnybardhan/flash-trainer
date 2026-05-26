@@ -618,7 +618,7 @@
   .range-picker-stage svg { display: block; }
   .range-picker-stage .range-hit { cursor: pointer; fill: none; pointer-events: all; }
   .range-picker-stage .range-hit:hover { fill: var(--accent); fill-opacity: 0.10; }
-  .range-picker-stage .range-band { fill: var(--accent); fill-opacity: 0.12; pointer-events: none; }
+  .range-picker-stage .range-band { fill: #4ec6c0; fill-opacity: 0.32; stroke: none; pointer-events: none; }
   .range-picker-stage .range-bound-note,
   .range-picker-stage .range-pending-note { pointer-events: none; }
   .range-picker-stage .range-pending-note { opacity: 0.55; }
@@ -2330,12 +2330,13 @@ function drawNotehead(svg, cx, cy, stave, color, className, opacity) {
   const bottomY = stave.getYForLine(4);
   const spacing = (bottomY - topY) / 4; // px per staff line
   // Ledger lines above
+  const ledgerHalf = 13; // wider than the notehead so it reads as a ledger line
   if (cy < topY - spacing * 0.25) {
     let lineY = topY - spacing;
     while (lineY >= cy - spacing * 0.25) {
       svg.appendChild(svgEl('line', {
-        x1: cx - 9, x2: cx + 9, y1: lineY, y2: lineY,
-        stroke: color, 'stroke-width': 1, class: className + '-ledger'
+        x1: cx - ledgerHalf, x2: cx + ledgerHalf, y1: lineY, y2: lineY,
+        stroke: color, 'stroke-width': 1.2, class: className + '-ledger'
       }));
       lineY -= spacing;
     }
@@ -2343,8 +2344,8 @@ function drawNotehead(svg, cx, cy, stave, color, className, opacity) {
     let lineY = bottomY + spacing;
     while (lineY <= cy + spacing * 0.25) {
       svg.appendChild(svgEl('line', {
-        x1: cx - 9, x2: cx + 9, y1: lineY, y2: lineY,
-        stroke: color, 'stroke-width': 1, class: className + '-ledger'
+        x1: cx - ledgerHalf, x2: cx + ledgerHalf, y1: lineY, y2: lineY,
+        stroke: color, 'stroke-width': 1.2, class: className + '-ledger'
       }));
       lineY += spacing;
     }
@@ -2373,7 +2374,7 @@ function renderRangePicker() {
   const { trebleRange, bassRange } = pickerVisibleFor(ns.hand);
   const VF = Vex.Flow;
 
-  const spacing = 16; // staff line spacing in px (bigger than the default 10)
+  const spacing = 12; // staff line spacing in px (default 10; this is just a touch bigger)
   const width = 420;
   const isGrand = trebleRange && bassRange;
   // Each stave takes 4 * spacing for the lines, plus padding for ledgers above/below.
@@ -2424,17 +2425,21 @@ function renderRangePicker() {
     return { y: bassStave.getYForLine(pitchToLineFromTop(pitch, 'bass')), stave: bassStave };
   }
 
-  // Highlight band between current bounds.
+  // Highlight band between current bounds — narrow ribbon centered on
+  // the chord stack rather than spanning the full bar width.
   const xStart = 80;            // just past the clef glyph
   const xEnd = width - 24;
-  const chordX = (xStart + xEnd) / 2;  // single x for stacked bound noteheads
+  const chordX = (xStart + xEnd) / 2;
+  const bandHalfW = 28;
   if (!pickerError) {
     const loInfo = pitchInfo(ns.rangeLow);
     const hiInfo = pitchInfo(ns.rangeHigh);
-    const minY = Math.min(loInfo.y, hiInfo.y) - spacing * 0.5;
-    const maxY = Math.max(loInfo.y, hiInfo.y) + spacing * 0.5;
+    const minY = Math.min(loInfo.y, hiInfo.y) - spacing * 0.6;
+    const maxY = Math.max(loInfo.y, hiInfo.y) + spacing * 0.6;
     svg.appendChild(svgEl('rect', {
-      x: xStart, y: minY, width: xEnd - xStart, height: maxY - minY, class: 'range-band'
+      x: chordX - bandHalfW, y: minY,
+      width: bandHalfW * 2, height: maxY - minY,
+      rx: 4, class: 'range-band'
     }));
   }
 
