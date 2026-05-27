@@ -53,8 +53,17 @@ function computeDegreeTone(rootPitch, degreeId) {
 // hits Begin and the drill is 'degrees'.
 function buildDegreeSessionAnchor() {
   const ns = state.notation;
-  const key = ns.degreeKey || 'C';
   const quality = ns.degreeChordQuality || 'major';
+  // If the saved key+quality is one of the awkward enharmonic combos
+  // (e.g. G# major, Db minor), silently flip to the cleaner spelling.
+  const rawKey = ns.degreeKey || 'C';
+  const key = (typeof preferredSpellingFor === 'function')
+    ? preferredSpellingFor(rawKey, quality) : rawKey;
+  if (key !== rawKey) {
+    ns.degreeKey = key;
+    const sel = $('degree-key-select');
+    if (sel) sel.value = key;
+  }
   const triad = placeChordInRange(key, quality, 'root', ns.rangeLow, ns.rangeHigh)
                  || placeChordInRange(key, quality, 'root', 'C3', 'C6');
   if (!triad) return null;

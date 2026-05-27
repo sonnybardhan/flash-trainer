@@ -408,8 +408,15 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
   const chordClef = resolveChordClef(card, ns.clef, 'closed') || 'treble';
   const placeRange = narrowRangeForClef(ns.rangeLow, ns.rangeHigh, chordClef);
   const raw = placeChordInRange(card.spelling, card.quality, card.inversion, placeRange.lo, placeRange.hi);
-  if (!raw) { renderSkip(container); return; }
+  if (!raw) { card.expectedPitches = null; renderSkip(container); return; }
   const pitches = substituteAll(raw, card);
+  // Track all sounding pitches for MIDI matching, including a doubled bass root.
+  let expected = [...pitches];
+  if (ns.doubleRootInBass && chordClef === 'treble') {
+    const rootTone = pitches.find(p => p.role === 'root');
+    if (rootTone) expected = [...expected, { ...rootTone, octave: rootTone.octave - 1 }];
+  }
+  card.expectedPitches = expected;
 
   const chordNotes = articulation === 'block'
     ? [makeBlockNote(VF, chordClef, pitches, addAcc)]
@@ -439,8 +446,9 @@ function renderClosedGrand(card, container, ctx, VF, width, articulation, direct
 function renderOpenGrand(card, container, ctx, VF, width, articulation, direction, keyName, addAcc, ns) {
   const { trebleStave, bassStave } = buildGrandStaff(VF, ctx, width, keyName);
   const raw = placeOpenVoicing(card, ns.rangeLow, ns.rangeHigh);
-  if (!raw) { renderSkip(container); return; }
+  if (!raw) { card.expectedPitches = null; renderSkip(container); return; }
   const placed = { bass: substituteAll(raw.bass, card), treble: substituteAll(raw.treble, card) };
+  card.expectedPitches = [...placed.bass, ...placed.treble];
 
   if (articulation === 'block') {
     // Whole-note chord on each staff, aligned at the same x by formatting
@@ -506,6 +514,9 @@ function renderNotation(card, container) {
 
   const articulation = resolveArticulation(ns.articulation);
   const direction = resolveDirection(ns.arpeggioDirection);
+  // Stamp what we actually drew so MIDI matching honors mixed-mode coin-flips.
+  card.renderedArticulation = articulation;
+  card.renderedDirection = direction;
   const keyName = ns.accidentals === 'keySig' ? keySigFor(card.spelling, card.quality) : null;
   const addAcc = (note, ps) => {
     ps.forEach((p, i) => {
@@ -526,8 +537,9 @@ function renderNotation(card, container) {
   if (!isGrand) {
     const clef = ns.clef === 'bass' ? 'bass' : 'treble';
     const raw = placeChordInRange(card.spelling, card.quality, card.inversion, ns.rangeLow, ns.rangeHigh);
-    if (!raw) { renderSkip(container); return; }
+    if (!raw) { card.expectedPitches = null; renderSkip(container); return; }
     const pitches = substituteAll(raw, card);
+    card.expectedPitches = pitches;
     const stave = new VF.Stave(8, 18, width - 16);
     stave.addClef(clef);
     if (keyName) stave.addKeySignature(keyName);

@@ -210,6 +210,10 @@
         <label>Play sound</label>
         <div class="switch" id="play-sound-switch"></div>
       </div>
+      <div class="form-row" id="midi-thru-row">
+        <label>MIDI thru</label>
+        <div class="switch" id="midi-thru-switch"></div>
+      </div>
       <div class="form-row" id="piano-preset-row" style="display:none;">
         <label>Piano</label>
         <select id="piano-preset-select"></select>
@@ -252,6 +256,7 @@
           <label>Mode</label>
           <select id="advance-select">
             <option value="manual">Tap card</option>
+            <option value="midi" id="advance-option-midi" hidden>On correct play (MIDI)</option>
             <option value="seconds">Every N seconds</option>
             <option value="beats">Every N beats</option>
             <option value="bars">Every N bars</option>
@@ -493,11 +498,15 @@
   </div>
 </div>
 
+<div id="midi-indicator" class="midi-indicator hidden" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <script src="vexflow.js"></script>
 <script src="notation.js"></script>
 <script src="sound.js"></script>
 <script src="intervals.js"></script>
 <script src="degrees.js"></script>
+<script src="midi.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

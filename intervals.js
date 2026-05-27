@@ -138,6 +138,7 @@ function renderIntervalCard(card) {
   $('card-notation').replaceChildren();
   $('card-answer-chips').replaceChildren();
   const articulation = resolveArticulation(state.notation.articulation);
+  card.renderedArticulation = articulation;
   // Block displays the interval as a stacked dyad; arpeggio shows the two
   // pitches sequentially. Pass root-first ordering so direction (up/down) is
   // visible in arpeggio mode.

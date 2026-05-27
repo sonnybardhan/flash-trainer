@@ -296,6 +296,81 @@ async function playSequence(entries, gapSec = 0.5, durationSec = 0.9) {
   });
 }
 
+// ============================================================
+// MIDI thru — live key playback for an attached controller.
+// Maintains per-note envelopes so note-off can release the actual
+// sounding voice, and tracks a sustain-pedal latch (MIDI CC 64).
+// ============================================================
+const _liveMidiNotes = new Map();    // midi number -> WebAudioFont envelope
+const _sustainedMidi = new Set();    // notes pending release while pedal is down
+let _midiSustainPedal = false;
+
+function pianoLiveNoteOn(midi, velocity) {
+  // MIDI note-on counts as a user activation in modern Chrome — safe to
+  // create+resume the AudioContext here so live thru works before the user
+  // has clicked anything.
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+  // If the user changed the piano preset, kick off the load so future notes
+  // sound right. We still play *this* note with whatever's currently loaded so
+  // there's no audible dropout while the new preset's samples decode.
+  const desiredId = (state.notation && state.notation.pianoPreset) || DEFAULT_PRESET_ID;
+  if (desiredId !== _activePresetId) {
+    _ensurePreset(desiredId).catch(() => {});
+  }
+  if (!_player || !_activePresetData) {
+    _ensurePreset(desiredId).catch(() => {});
+    return;
+  }
+  // Re-strike: release any existing envelope for the same key.
+  const prev = _liveMidiNotes.get(midi);
+  if (prev) {
+    try { prev.cancel(); } catch (e) { /* envelope already detached */ }
+    _liveMidiNotes.delete(midi);
+  }
+  _sustainedMidi.delete(midi);
+  const vol = Math.max(0.05, Math.min(1.2, (velocity / 127) * 0.9));
+  // Schedule at currentTime exactly — any positive offset is added latency.
+  const t = audioCtx.currentTime;
+  // Route DIRECTLY to destination — bypass EQ + reverb chain. Each extra
+  // node adds a small amount of processing latency and (more importantly)
+  // the convolver in parallel can spike overall output latency on some
+  // browsers even when wetGain is zero.
+  const env = _player.queueWaveTable(audioCtx, audioCtx.destination,
+                                      _activePresetData, t, midi, 10, vol);
+  if (env) _liveMidiNotes.set(midi, env);
+}
+
+function pianoLiveNoteOff(midi) {
+  if (_midiSustainPedal) {
+    if (_liveMidiNotes.has(midi)) _sustainedMidi.add(midi);
+    return;
+  }
+  const env = _liveMidiNotes.get(midi);
+  if (env) {
+    try { env.cancel(); } catch (e) {}
+    _liveMidiNotes.delete(midi);
+  }
+}
+
+function pianoLiveSustainOn() { _midiSustainPedal = true; }
+
+function pianoLiveSustainOff() {
+  _midiSustainPedal = false;
+  for (const midi of _sustainedMidi) {
+    const env = _liveMidiNotes.get(midi);
+    if (env) {
+      try { env.cancel(); } catch (e) {}
+      _liveMidiNotes.delete(midi);
+    }
+  }
+  _sustainedMidi.clear();
+}
+
 // Quick preview — play a C major triad with the current voicing/EQ/preset
 // settings so the user can audition the sound without starting a session.
 async function previewChord(articulation) {
@@ -307,7 +382,7 @@ async function previewChord(articulation) {
   const meter = state.metronome.meter || 4;
   // Need to prime the audio context if it hasn't been already. The click
   // handler that calls us is itself a user gesture, so resume() succeeds.
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   await playChord(pitches, { articulation, bpm, meter, direction });
 }

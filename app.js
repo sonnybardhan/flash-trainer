@@ -72,7 +72,8 @@ const state = {
     unconventionalSpellings: false,
     playSound: false,            // piano audio on each card (lazy loads engine)
     pianoPreset: 'fluidr3',      // see PIANO_PRESETS in sound.js
-    eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 }  // see EQ_PRESETS in sound.js
+    eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 },  // see EQ_PRESETS in sound.js
+    midiThru: true               // route MIDI input through the piano engine
   }
 };
 
@@ -382,6 +383,7 @@ function updateCollapseMeta() {
   const advanceVal = $('advance-select').value;
   const labels = {
     manual: 'Tap card',
+    midi: 'On correct play',
     seconds: `${state.steppers.seconds}s`,
     beats: `${state.steppers.beats} beats`,
     bars: `${state.steppers.bars} bars`
@@ -509,6 +511,50 @@ function updateAdvanceUI() {
   $('seconds-row').style.display = val === 'seconds' ? 'flex' : 'none';
   $('beats-row').style.display = val === 'beats' ? 'flex' : 'none';
   $('bars-row').style.display = val === 'bars' ? 'flex' : 'none';
+}
+
+// ============================================================
+// Toast (transient bottom-center message)
+// ============================================================
+let _toastTimer = null;
+function showToast(message, ms = 3000) {
+  const el = $('toast');
+  if (!el) return;
+  el.textContent = message;
+  el.classList.add('visible');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('visible'), ms);
+}
+
+// Called by midi.js whenever the connected-device set changes (or is first
+// observed). Manages the "On correct play (MIDI)" advance option and handles
+// mid-session disconnect.
+function onMidiConnectivityChange(connectedCount, prevCount) {
+  const select = $('advance-select');
+  const opt = $('advance-option-midi');
+  if (!select || !opt) return;
+  opt.hidden = connectedCount === 0;
+  // First connect (transitioning from 0→N): if user is sitting on Tap card,
+  // upgrade to MIDI advance.
+  if (connectedCount > 0 && prevCount === 0 && select.value === 'manual') {
+    select.value = 'midi';
+    updateAdvanceUI();
+    updateCollapseMeta();
+  }
+  // Device went away while a session is running in MIDI mode — fall back
+  // to tap + toast so the user isn't stuck.
+  if (connectedCount === 0 && state.session && state.session.advance === 'midi') {
+    state.session.advance = 'manual';
+    select.value = 'manual';
+    updateAdvanceUI();
+    updateCollapseMeta();
+    showToast('MIDI device disconnected — switched to Tap card');
+  } else if (connectedCount === 0 && !state.session && select.value === 'midi') {
+    // Not in a session: bounce the dropdown off the now-hidden option.
+    select.value = 'manual';
+    updateAdvanceUI();
+    updateCollapseMeta();
+  }
 }
 
 $('metro-switch').addEventListener('click', () => {
@@ -705,6 +751,7 @@ function applyNotationSettingsToUI() {
   $('double-root-switch').classList.toggle('on', ns.doubleRootInBass);
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
   $('play-sound-switch').classList.toggle('on', ns.playSound);
+  $('midi-thru-switch').classList.toggle('on', ns.midiThru !== false);
   populatePianoPresetSelect();
   $('piano-preset-select').value = ns.pianoPreset || 'fluidr3';
   if (!ns.eq) ns.eq = { preset: 'warm', bassDb: 3 };
@@ -887,7 +934,10 @@ function setPianoPreset(presetId) {
   state.notation.pianoPreset = presetId;
   $('piano-preset-select').value = presetId;
   $('eq-piano-select').value = presetId;
-  if (state.notation.playSound) prefetchPianoEngine();
+  // Prefetch when either audio path needs it: card playback or live MIDI thru.
+  if (state.notation.playSound || state.notation.midiThru !== false) {
+    prefetchPianoEngine();
+  }
   updateEqCurrentLabel();
   saveNotationSettings();
 }
@@ -897,8 +947,8 @@ function rerenderCurrentCard() {
   // Interval/degree cards re-render via their own helpers; settings changes
   // mid-session for these drills are limited (mostly clef/range), so we just
   // re-run the per-drill render.
-  if (card.drill === 'interval') { renderIntervalCard(card); return; }
-  if (card.drill === 'degree')   { renderDegreeCard(card);   return; }
+  if (card.drill === 'interval') { renderIntervalCard(card); setupMidiForCard(card); return; }
+  if (card.drill === 'degree')   { renderDegreeCard(card);   setupMidiForCard(card); return; }
   const fc = $('flash-card');
   fc.classList.toggle('format-notation', state.notation.format === 'notation');
   fc.classList.toggle('format-text', state.notation.format === 'text');
@@ -909,6 +959,7 @@ function rerenderCurrentCard() {
     $('card-notation').replaceChildren();
   }
   renderChordNameOverlay(card);
+  setupMidiForCard(card);
 }
 $('format-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
@@ -942,13 +993,28 @@ $('interval-presets').addEventListener('click', (e) => {
 
 // Degree drill: key select + quality segment + scale picker.
 $('degree-key-select').addEventListener('change', (e) => {
-  state.notation.degreeKey = e.target.value;
+  const chosen = e.target.value;
+  const quality = state.notation.degreeChordQuality || 'major';
+  const preferred = preferredSpellingFor(chosen, quality);
+  state.notation.degreeKey = preferred;
+  if (preferred !== chosen) {
+    $('degree-key-select').value = preferred;
+    showToast(`${chosen} ${quality} notates poorly — using ${preferred} ${quality}`);
+  }
   saveNotationSettings();
 });
 $('degree-quality-segment').addEventListener('click', (e) => {
   const seg = e.target.closest('.segment');
   if (!seg) return;
-  state.notation.degreeChordQuality = seg.dataset.degreeQuality;
+  const newQuality = seg.dataset.degreeQuality;
+  const key = state.notation.degreeKey || 'C';
+  const preferredKey = preferredSpellingFor(key, newQuality);
+  state.notation.degreeChordQuality = newQuality;
+  if (preferredKey !== key) {
+    state.notation.degreeKey = preferredKey;
+    $('degree-key-select').value = preferredKey;
+    showToast(`${key} ${newQuality} notates poorly — using ${preferredKey} ${newQuality}`);
+  }
   setActiveSegment('degree-quality-segment', 'degreeQuality',
                     state.notation.degreeChordQuality);
   saveNotationSettings();
@@ -972,7 +1038,7 @@ $('card-tone-replay').addEventListener('click', async (e) => {
   if (!state.session || !state.session.lastCard) return;
   const card = state.session.lastCard;
   if (card.drill !== 'degree') return;
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   await playDegreeTone(card);
 });
@@ -1055,6 +1121,12 @@ $('play-sound-switch').addEventListener('click', () => {
   $('play-sound-switch').classList.toggle('on', state.notation.playSound);
   if (state.notation.playSound) prefetchPianoEngine();
   updateNotationRowVisibility();
+  saveNotationSettings();
+});
+$('midi-thru-switch').addEventListener('click', () => {
+  state.notation.midiThru = state.notation.midiThru === false;
+  $('midi-thru-switch').classList.toggle('on', state.notation.midiThru);
+  if (state.notation.midiThru) prefetchPianoEngine();
   saveNotationSettings();
 });
 $('piano-preset-select').addEventListener('change', (e) => setPianoPreset(e.target.value));
@@ -1266,6 +1338,26 @@ function isExcludedCombo(spelling, quality) {
   return EXCLUDED_COMBOS.has(`${spelling}:${quality}`);
 }
 
+// Enharmonic spelling pairs at each chromatic pitch class. When a (root,
+// quality) combo is excluded we look here to find the cleaner spelling.
+const ENHARMONIC_FLIP = {
+  'C#': 'Db', 'Db': 'C#',
+  'D#': 'Eb', 'Eb': 'D#',
+  'F#': 'Gb', 'Gb': 'F#',
+  'G#': 'Ab', 'Ab': 'G#',
+  'A#': 'Bb', 'Bb': 'A#'
+};
+
+// Returns the preferred spelling for a (root, quality) combo. If the combo
+// is excluded and the enharmonic equivalent is acceptable, returns that —
+// otherwise returns the original spelling unchanged.
+function preferredSpellingFor(spelling, quality) {
+  if (!isExcludedCombo(spelling, quality)) return spelling;
+  const flip = ENHARMONIC_FLIP[spelling];
+  if (flip && !isExcludedCombo(flip, quality)) return flip;
+  return spelling;
+}
+
 function buildQueue() {
   const base = [];
   for (const spelling of state.selectedSpellings)
@@ -1353,6 +1445,7 @@ function renderCard(card) {
     $('stat-progress').textContent = progressText();
     fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
     maybePlayIntervalAudio(card);
+    setupMidiForCard(card);
     return;
   }
   if (card.drill === 'degree') {
@@ -1366,6 +1459,7 @@ function renderCard(card) {
     } else {
       playDegreeTone(card);
     }
+    setupMidiForCard(card);
     return;
   }
 
@@ -1393,6 +1487,7 @@ function renderCard(card) {
   void fc.offsetWidth;
   fc.classList.add('transition');
   triggerPlayback(card);
+  setupMidiForCard(card);
 }
 
 // Fire piano playback for the current card if the toggle is on.
@@ -1418,7 +1513,7 @@ const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD = 0.1;
 
 async function ensureAudioContext() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     try { await audioCtx.resume(); } catch (e) { /* iOS may reject outside user gesture */ }
   }
@@ -1596,7 +1691,7 @@ $('start-btn').addEventListener('click', () => {
   // Also prime for interval/degree drills since their replay buttons and
   // (for degrees) chord+tone playback both need an active context.
   if (state.notation.playSound || drill !== 'chords') {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     if (drill !== 'chords') prefetchPianoEngine();
   }
@@ -1678,7 +1773,7 @@ $('flash-card').addEventListener('click', (e) => {
       revealIntervalName(card);
       return;
     }
-    if (s.advance === 'manual') nextCard();
+    if (s.advance === 'manual' || s.advance === 'midi') nextCard();
     return;
   }
   // Chord drill — existing behavior.
@@ -1687,7 +1782,7 @@ $('flash-card').addEventListener('click', (e) => {
     renderChordNameOverlay(card);
     return;
   }
-  if (s.advance === 'manual') nextCard();
+  if (s.advance === 'manual' || s.advance === 'midi') nextCard();
 });
 
 // ============================================================
@@ -1766,7 +1861,7 @@ $('quit-x').addEventListener('click', () => endSession(false));
 // gesture so resume() is allowed.
 $('replay-btn').addEventListener('click', async () => {
   if (!state.session || !state.session.lastCard) return;
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   const card = state.session.lastCard;
   if (card.drill === 'interval') {
@@ -1927,3 +2022,6 @@ if (!historyExists) {
 }
 
 renderAll();
+
+// MIDI input — fire-and-forget so a denied permission doesn't block the app.
+initMidi();
