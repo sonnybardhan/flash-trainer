@@ -16,7 +16,10 @@
 <div id="app">
   <div class="app-header">
     <h1 class="app-title">Rep Trainer</h1>
-    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">◐</button>
+    <div class="header-right">
+      <div id="midi-indicator" class="midi-indicator hidden" aria-live="polite"></div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">◐</button>
+    </div>
   </div>
 
   <!-- Drill type -->
@@ -498,7 +501,6 @@
   </div>
 </div>
 
-<div id="midi-indicator" class="midi-indicator hidden" aria-live="polite"></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="vexflow.js"></script>
