@@ -71,6 +71,39 @@ const PHRASE_RHYTHM_SVG = {
 const PHRASE_ALLOWED_DEFAULT = ['quarter', 'half', 'eighthPair'];
 const PHRASE_INTERACTIONS = ['aural-free', 'aural-intime', 'sing', 'id-degrees'];
 
+// Pick the root pitch's octave so the phrase sits inside the user's
+// active range. Both modes honour the existing degreeRangeMode
+// setting from the degree drill (Auto = P4 below root → octave + M3
+// above; Custom = the global rangeLow/rangeHigh).
+function pickPhraseRootOctave(key, quality) {
+  const ns = state.notation;
+  const root = parseSpelling(key);
+  const LETTER_SEMI_LOCAL = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  // Try octaves 2..6 and pick the one whose root + octave+M3 above fits
+  // best in the active range. Defaults to 4 if everything fits or
+  // nothing fits cleanly.
+  let lowSemi, highSemi;
+  if ((ns.degreeRangeMode || 'auto') === 'custom' && typeof parsePitchName === 'function') {
+    lowSemi  = pitchSemitones(parsePitchName(ns.rangeLow  || 'C3'));
+    highSemi = pitchSemitones(parsePitchName(ns.rangeHigh || 'C6'));
+  } else {
+    // Auto: leave the choice fully open across 2..6; the phrase's pool
+    // only spans an octave + maybe-upper-tonic, so any of those octaves
+    // works. Pick 4 as the friendly default.
+    return { letter: root.letter, accidental: root.accidental, octave: 4 };
+  }
+  for (const oct of [4, 3, 5, 2, 6]) {
+    const rootSemi = oct * 12 + LETTER_SEMI_LOCAL[root.letter] + root.accidental;
+    // Phrase pitches span from root (semi 0 above root) up through the
+    // upper tonic (semi 12 above root). So the playable extent is
+    // [rootSemi, rootSemi + 12].
+    if (rootSemi >= lowSemi && rootSemi + 12 <= highSemi) {
+      return { letter: root.letter, accidental: root.accidental, octave: oct };
+    }
+  }
+  return { letter: root.letter, accidental: root.accidental, octave: 4 };
+}
+
 // Build the session anchor: snapshot the context + chosen root pitch
 // so settings changes mid-session don't shift the generation pool.
 function buildPhraseSessionAnchor() {
@@ -84,10 +117,11 @@ function buildPhraseSessionAnchor() {
     const sel = $('degree-key-select');
     if (sel) sel.value = key;
   }
-  // Phrase pitches are relative to the tonic (semi 0 = root). The
-  // root pitch itself sits at octave 4 by default; in-time and
-  // aural-recall modes will use this as the playback anchor.
-  const rootPitch = { letter: key[0], accidental: key.includes('#') ? 1 : (key[1] === 'b' ? -1 : 0), octave: 4 };
+  // Anchor the root in an octave that fits the user's range. Reuses
+  // the same Auto/Custom logic as the degree drill: Auto picks an
+  // octave whose pitches sit comfortably within the auto-range; Custom
+  // honours ns.rangeLow/rangeHigh.
+  const rootPitch = pickPhraseRootOctave(key, quality);
   const degreeIds = (ns.degreeScaleDegrees && ns.degreeScaleDegrees.length)
     ? ns.degreeScaleDegrees
     : ['1','2','3','4','5','6','7'];
@@ -124,7 +158,12 @@ function buildPhraseCard() {
       maxAttempts: 200
     });
   } catch (e) {
-    console.warn('[phrases] generation failed:', e.message);
+    // Dump the full anchor so we can diagnose what state actually
+    // tripped the generator — not just the final validator code.
+    console.warn('[phrases] generation failed:', e.message, {
+      key: anchor.key, quality: anchor.quality, bars: anchor.bars,
+      durations: anchor.allowedDurations, context: anchor.context
+    });
     return null;
   }
   return {

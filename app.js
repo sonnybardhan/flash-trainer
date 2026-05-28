@@ -1115,6 +1115,24 @@ $('phrase-rests-switch').addEventListener('click', () => {
   saveNotationSettings();
 });
 
+// Sanity-check the phrase config before running the generator. Returns
+// a human-readable issue string, or null if the config is fine.
+function validatePhraseConfig(anchor) {
+  if (!anchor) return 'Phrase config is missing — try reloading the page.';
+  if (!anchor.allowedDurations || anchor.allowedDurations.length === 0) {
+    return 'You haven’t selected any rhythms. Tap at least one rhythm chip (Half or Quarter at minimum — phrases need a cadential note to end on).';
+  }
+  const hasCadential = anchor.allowedDurations.includes('quarter') ||
+                       anchor.allowedDurations.includes('half');
+  if (!hasCadential) {
+    return 'Your rhythm selection has no Quarter or Half note — phrases need at least one of those to end the bar on a cadential note.';
+  }
+  if (!anchor.context.available || anchor.context.available.length === 0) {
+    return 'You haven’t selected any scale degrees. Tap at least one degree chip in the Key & chord panel.';
+  }
+  return null;
+}
+
 function renderPhraseRhythmChips() {
   const c = $('phrase-rhythm-chips');
   if (!c) return;
@@ -1948,6 +1966,17 @@ $('start-btn').addEventListener('click', () => {
     return;
   }
   const phraseAnchor = drill === 'phrases' ? buildPhraseSessionAnchor() : null;
+  if (drill === 'phrases') {
+    const issue = validatePhraseConfig(phraseAnchor);
+    if (issue) {
+      showModal({
+        title: 'Phrase config needs a tweak',
+        body: issue,
+        actions: [{ label: 'OK', kind: 'primary' }]
+      });
+      return;
+    }
+  }
 
   state.session = {
     mode, advance: effectiveAdvance, target,
