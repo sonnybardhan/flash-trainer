@@ -2197,6 +2197,11 @@ $('replay-btn').addEventListener('click', async () => {
     await replayDegreeChord();
     return;
   }
+  if (card.drill === 'phrase') {
+    const bpm = (state.metronome && state.metronome.bpm) || 80;
+    await playPhrase(card.phrase, card.rootPitch, bpm);
+    return;
+  }
   const pitches = computePlaybackPitches(card);
   if (!pitches) return;
   const articulation = resolveArticulation(state.notation.articulation);

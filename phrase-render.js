@@ -83,6 +83,12 @@ function renderPhrase(phrase, rootPitch, container, opts = {}) {
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
   renderer.resize(totalWidth, height);
   const ctx = renderer.getContext();
+  // Honour the active theme — VexFlow defaults to mid-grey otherwise.
+  const themeText = (typeof themeColor === 'function')
+    ? themeColor()
+    : (getComputedStyle(document.body).getPropertyValue('--text').trim() || '#e5e9f0');
+  if (typeof ctx.setFillStyle === 'function') ctx.setFillStyle(themeText);
+  if (typeof ctx.setStrokeStyle === 'function') ctx.setStrokeStyle(themeText);
 
   const tuplets = [];      // VF.Tuplet[]
   const beams = [];        // VF.Beam[]

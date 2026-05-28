@@ -81,9 +81,11 @@ function showOnScreenKeyboardFor(card) {
     (card.interaction === 'aural-free' || card.interaction === 'aural-intime');
   if (!shouldShow) {
     dock.style.display = 'none';
+    document.body.classList.remove('osk-active');
     return;
   }
   dock.style.display = 'block';
+  document.body.classList.add('osk-active');
   // Anchor on the card's root MIDI for natural placement.
   const LETTER_SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   const r = card.rootPitch;
@@ -94,4 +96,5 @@ function showOnScreenKeyboardFor(card) {
 function hideOnScreenKeyboard() {
   const dock = document.getElementById('osk-dock');
   if (dock) dock.style.display = 'none';
+  document.body.classList.remove('osk-active');
 }

@@ -909,6 +909,11 @@
   .phrase-rhythm-chip.active svg { color: var(--accent-text); }
   .phrase-rhythm-glyph { display: inline-flex; }
 
+  /* When the on-screen keyboard is visible, push the flashcard
+     content (incl. pause/end footer) above it so nothing hides
+     behind the dock. */
+  body.osk-active #flashcard-view { padding-bottom: 150px; }
+
   /* ================= ON-SCREEN KEYBOARD ================= */
   .osk {
     position: fixed; left: 0; right: 0; bottom: 0;
@@ -920,7 +925,7 @@
   }
   .osk-grid {
     position: relative;
-    display: flex; align-items: flex-end;
+    display: flex; align-items: flex-start;
     height: 110px;
     gap: 1px;
     user-select: none;
@@ -928,40 +933,47 @@
   }
   .osk-key {
     appearance: none;
-    border: 1px solid var(--border-strong);
     cursor: pointer;
     padding: 0;
-    color: var(--text-faint);
   }
+  /* White keys: actual white, dark text. Stay on the bottom; the black
+     keys nest INSIDE them at the top via negative margin + z-index. */
   .osk-key.white {
     flex: 1 1 0; min-width: 24px;
     height: 110px;
-    background: var(--surface);
+    background: #f5f3ed;
+    color: #2a2a2a;
+    border: 1px solid #9a958b;
     border-radius: 0 0 6px 6px;
     display: flex; align-items: flex-end; justify-content: center;
     padding-bottom: 6px;
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,0.08);
   }
+  /* Black keys: actual black, sit ON TOP of the adjacent white keys,
+     overlapping their upper area. Negative margins overlap two whites. */
   .osk-key.black {
     position: relative;
     margin-left: -14px;
     margin-right: -14px;
     width: 28px;
     height: 70px;
-    background: var(--surface-2);
+    background: #1a1a1a;
+    color: #e0e0e0;
+    border: 1px solid #050505;
     border-radius: 0 0 4px 4px;
     z-index: 2;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.5), inset 0 -4px 0 rgba(255,255,255,0.06);
   }
   .osk-key.white.pressed {
-    background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    background: color-mix(in srgb, var(--accent) 35%, #f5f3ed);
     border-color: var(--accent);
   }
   .osk-key.black.pressed {
-    background: color-mix(in srgb, var(--accent) 50%, var(--surface-2));
+    background: color-mix(in srgb, var(--accent) 55%, #1a1a1a);
     border-color: var(--accent);
   }
   .osk-label {
-    font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+    font-family: var(--mono); font-size: 9px; color: #6a6a6a;
     letter-spacing: 0.5px;
   }
 
