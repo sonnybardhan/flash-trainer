@@ -96,23 +96,23 @@ The rule matches every hand-curated lesson in CET's library.
 
 ### 4. `resolvesTo` — derived rule
 
-CET hand-curates these per non-chord-tone. We derive them with one
-rule:
+CET hand-curates these per non-chord-tone. We derive them with the
+following tiered rule, applied in order until one tier yields targets:
 
-> Each non-chord-tone in `available` resolves to the **nearest chord
-> tone(s) within a major 2nd** in the available pool.
+1. **Half-step to an in-octave chord tone** (strongest resolution).
+   Example: F → E in C major.
+2. **Half-step up to the upper tonic** (leading-tone case). Only
+   triggers when `includesUpperTonic` is true and the note is exactly
+   one semitone below the tonic. Example: B → C in C major.
+3. **Whole-step to an in-octave chord tone.** Example: D → {C, E}.
+4. **Single nearest in-octave chord tone**, regardless of distance.
+   Example: b7 → 5 in C minor pentatonic (Bb is 3 semitones above G).
 
-Algorithm per non-chord-tone `p`:
-
-1. Compute the distance (in semitones) from `p` to every chord tone
-   that's also in `available`.
-2. Keep chord tones within ±2 semitones.
-3. If both an upper and a lower target qualify within that window,
-   include both (the generator picks whichever is appropriate by
-   contour context — this matches CET's "D → {C, E}" pattern).
-4. If no chord tone is within ±2, fall back to the single nearest
-   chord tone regardless of distance (rare; only triggers on sparse
-   selections like {1, 5} where 5 is the only target).
+The upper tonic is **only** considered for tier 2 (leading tone) — it
+isn't a general-purpose "+12 chord tone" candidate. This matters for
+b7 in minor pentatonic: without the restriction, Bb → C (M2 up to
+upper tonic) would beat Bb → G (m3 down to in-octave 5), which is
+the actual jazz pedagogy resolution.
 
 Examples:
 

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Phrase context — derivation vs. CET lessons</title>
+<style>body{background:#1c1f26;color:#e5e9f0;font-family:ui-monospace,monospace;padding:24px;line-height:1.5;font-size:13px}
+h1{color:#e5e9f0}h2{color:#88c0d0;margin-top:24px;font-size:14px}
+table{border-collapse:collapse;margin:6px 0;width:100%}
+th,td{padding:6px 10px;border-bottom:1px solid #353b48;text-align:left;vertical-align:top}
+th{color:#8a93a3;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.match{color:#a3d9a5}.mismatch{color:#bf616a}.note{color:#8a93a3;font-size:11px}
+code{color:#88c0d0}
+</style></head><body>
+<h1>Phrase context — derivation rules vs. CET hand-curated lessons</h1>
+<p class="note">Compares the JS derivation (phrase-context.js) against the
+hand-curated <code>PitchContextLibrary</code> from the Creative Ear Trainer
+Swift project. ✓ = exact match. ✗ = mismatch (flagged in the spec).</p>
+<div id="results"></div>
+
+<script src="phrase-context.js"></script>
+<script>
+const SEMI_LABEL = { 0:'C', 1:'Db', 2:'D', 3:'Eb', 4:'E', 5:'F', 6:'F#',
+                     7:'G', 8:'Ab', 9:'A', 10:'Bb', 11:'B' };
+const PITCH_TO_SEMI = { C:0, Db:1, D:2, Eb:3, E:4, F:5, 'F#':6, G:7, Ab:8, A:9, Bb:10, B:11 };
+
+function pitches(arr) { return arr.map(p => PITCH_TO_SEMI[p]).sort((a,b)=>a-b); }
+function label(semis) { return semis.map(s => SEMI_LABEL[s]).join(', '); }
+function setEq(a, b) { const sa = new Set(a), sb = new Set(b); if (sa.size !== sb.size) return false; for (const x of sa) if (!sb.has(x)) return false; return true; }
+function mapSetEq(a, b) {
+  // Compare resolution maps. Values are arrays of semis (CET lesson values
+  // might include non-chord-tone targets; we relax to subset for "soft match").
+  const keysA = Object.keys(a).map(Number).sort((x,y)=>x-y);
+  const keysB = Object.keys(b).map(Number).sort((x,y)=>x-y);
+  if (keysA.length !== keysB.length) return { eq: false, reason: 'different keys' };
+  for (let i = 0; i < keysA.length; i++) if (keysA[i] !== keysB[i]) return { eq: false, reason: 'different keys' };
+  for (const k of keysA) {
+    if (!setEq(a[k], b[k])) return { eq: false, reason: `${SEMI_LABEL[k]} → expected {${label(a[k])}}, derived {${label(b[k])}}` };
+  }
+  return { eq: true };
+}
+
+// CET's hand-curated lessons, transcribed from PitchContextLibrary.swift.
+const lessons = [
+  { name: 'C major first 4',     quality:'major',
+    available: pitches(['C','D','E','F']),     chordTones: pitches(['C','E']),
+    avoidNotes: pitches(['F']),
+    resolvesTo: { 2: [0, 4], 5: [4] } },
+  { name: 'C major first 5',     quality:'major',
+    available: pitches(['C','D','E','F','G']), chordTones: pitches(['C','E','G']),
+    avoidNotes: pitches(['F']),
+    resolvesTo: { 2: [0, 4], 5: [4] } },
+  { name: 'C major scale',       quality:'major',
+    available: pitches(['C','D','E','F','G','A','B']), chordTones: pitches(['C','E','G']),
+    avoidNotes: pitches(['F']),
+    resolvesTo: { 2: [0, 4], 5: [4], 9: [7, 11], 11: [0] } },
+  { name: 'C major pentatonic',  quality:'major',
+    available: pitches(['C','D','E','G','A']), chordTones: pitches(['C','E','G']),
+    avoidNotes: [],
+    resolvesTo: { 2: [0, 4], 9: [7] } },
+  { name: 'C minor pentatonic',  quality:'minor',
+    available: pitches(['C','Eb','F','G','Bb']), chordTones: pitches(['C','Eb','G']),
+    avoidNotes: [],
+    resolvesTo: { 5: [3, 7], 10: [7] } },
+  { name: 'C major triad pool',  quality:'major',
+    available: pitches(['C','E','G']),         chordTones: pitches(['C','E','G']),
+    avoidNotes: [], resolvesTo: {} },
+  { name: 'C minor triad pool',  quality:'minor',
+    available: pitches(['C','Eb','G']),        chordTones: pitches(['C','Eb','G']),
+    avoidNotes: [], resolvesTo: {} },
+];
+
+// Map semitone array → degree-id array for the buildPhraseContext input.
+const SEMI_TO_DEGREE = {
+  0:'1', 1:'b2', 2:'2', 3:'b3', 4:'3', 5:'4', 6:'#4',
+  7:'5', 8:'b6', 9:'6', 10:'b7', 11:'7'
+};
+
+const root = document.getElementById('results');
+for (const L of lessons) {
+  const degreeIds = L.available.map(s => SEMI_TO_DEGREE[s]);
+  const derived = buildPhraseContext(degreeIds, L.quality, {
+    includesUpperTonic: true   // CET's lessons all enable this
+  });
+
+  // Compare available / chordTones / avoidNotes / resolvesTo.
+  const availOk = setEq(L.available, derived.available);
+  const chordOk = setEq(L.chordTones, derived.chordTones);
+  const avoidOk = setEq(L.avoidNotes, derived.avoidNotes);
+  const resCmp  = mapSetEq(L.resolvesTo, derived.resolvesTo);
+
+  const h2 = document.createElement('h2');
+  h2.textContent = L.name;
+  root.appendChild(h2);
+
+  const table = document.createElement('table');
+  const rows = [
+    ['available',  label(L.available),  label(derived.available),  availOk],
+    ['chordTones', label(L.chordTones), label(derived.chordTones), chordOk],
+    ['avoidNotes', label(L.avoidNotes), label(derived.avoidNotes), avoidOk],
+    ['resolvesTo',
+      Object.entries(L.resolvesTo).map(([k,v]) => `${SEMI_LABEL[k]}→{${label(v)}}`).join('  '),
+      Object.entries(derived.resolvesTo).map(([k,v]) => `${SEMI_LABEL[k]}→{${label(v)}}`).join('  '),
+      resCmp.eq]
+  ];
+  const thead = document.createElement('thead');
+  const trHead = document.createElement('tr');
+  for (const h of ['field','CET hand-curated','derived','status']) {
+    const th = document.createElement('th'); th.textContent = h; trHead.appendChild(th);
+  }
+  thead.appendChild(trHead); table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+  for (const [field, cet, der, ok] of rows) {
+    const tr = document.createElement('tr');
+    for (const cell of [field, cet || '(empty)', der || '(empty)']) {
+      const td = document.createElement('td'); td.textContent = cell; tr.appendChild(td);
+    }
+    const tdStatus = document.createElement('td');
+    tdStatus.textContent = ok ? '✓' : '✗';
+    tdStatus.className   = ok ? 'match' : 'mismatch';
+    tr.appendChild(tdStatus);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody); root.appendChild(table);
+}
+document.body.dataset.ready = '1';
+</script>
+</body></html>
