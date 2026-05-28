@@ -1579,6 +1579,7 @@ function renderCard(card) {
     $('stat-progress').textContent = progressText();
     fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
     playPhraseCard(card);
+    setupMidiForCard(card);
     return;
   }
 

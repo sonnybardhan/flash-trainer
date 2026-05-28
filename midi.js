@@ -120,6 +120,12 @@ function midiThruEnabled() {
   return state.notation.midiThru !== false;
 }
 
+// External entry point for non-MIDI input sources (on-screen keyboard,
+// tests). Behaves identically to a real device note-on, including
+// MIDI-thru audio + matcher dispatch.
+function simulateNoteOn(midi, velocity = 100) { onNoteOn(midi, velocity); }
+function simulateNoteOff(midi)                { onNoteOff(midi); }
+
 function onNoteOn(note, velocity) {
   midiState.heldNotes.add(note);
   midiState.sequence.push(note);
@@ -348,6 +354,30 @@ function setupMidiForCard(card) {
     return;
   }
 
+  if (card.drill === 'phrase') {
+    if (card.answered) return;
+    // Aural recall, free time — track the pitch-class sequence of every
+    // sounding note in the phrase. The existing pitchClassSequence matcher
+    // is a sliding window: it fires when the *tail* of the user's note-ons
+    // equals the expected sequence, which is exactly the karaoke behaviour
+    // we want (wrong notes don't reset; the user can keep trying).
+    if (card.interaction === 'aural-free') {
+      const rootMidi = pitchToMidi(card.rootPitch);
+      const seqMidis = card.phrase.events
+        .filter(e => e.kind === 'note')
+        .map(e => rootMidi + e.semitone + 12 * (e.octaveOffset || 0));
+      const pcSeq = seqMidis.map(n => ((n % 12) + 12) % 12);
+      setMidiMatcher({
+        mode: 'pitchClassSequence', expected: pcSeq, container,
+        onCorrect: () => onMidiCardCorrect(card)
+      });
+      return;
+    }
+    // Other phrase interaction modes (in-time / sing / id-degrees) are
+    // wired in later stages.
+    return;
+  }
+
   // Chord drill. Notation mode → exact voicing match. Text mode → pitch-class
   // match with bass-note (inversion) constraint.
   if (ns.format === 'notation') {
@@ -415,6 +445,13 @@ function onMidiCardCorrect(card) {
     state.session.degreeStats = state.session.degreeStats || { right: 0, total: 0, mistakes: 0 };
     state.session.degreeStats.total++;
     state.session.degreeStats.right++;
+  }
+  if (card.drill === 'phrase') {
+    if (card.answered) return;
+    card.answered = true;
+    card.correct = true;
+    // Reveal the staff on a successful recall so the user can compare.
+    if (typeof revealPhraseCard === 'function') revealPhraseCard(card);
   }
   // Brief beat so the user registers the green flash before the card flips.
   setTimeout(() => {
