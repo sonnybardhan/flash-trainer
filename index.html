@@ -30,6 +30,7 @@
         <div class="segment" data-drill="chords">Chords</div>
         <div class="segment" data-drill="intervals">Intervals</div>
         <div class="segment" data-drill="degrees">Degrees</div>
+        <div class="segment" data-drill="phrases">Phrases</div>
       </div>
     </div>
   </div>
@@ -77,8 +78,8 @@
     </div>
   </div>
 
-  <!-- Key + chord + scale (degree drill only) -->
-  <div class="section drill-degrees-only" id="degree-config-section" style="display:none;">
+  <!-- Key + chord + scale (degree drill + phrase drill) -->
+  <div class="section" id="degree-config-section" data-drills="degrees phrases" style="display:none;">
     <div class="section-label">Key &amp; chord</div>
     <div class="panel">
       <div class="form-row">
@@ -108,6 +109,35 @@
         </div>
       </div>
       <div class="mode-hint">The chord plays once at the start of each session. Tap a degree to add or remove it; the scale switches to “Custom” when you deviate from a preset. <strong>Auto</strong> range fits a P4 below the root through an octave + M3 above; <strong>Custom</strong> uses the global range setting.</div>
+    </div>
+  </div>
+
+  <!-- Phrase-specific config (phrases drill only) -->
+  <div class="section" id="phrase-config-section" data-drills="phrases" style="display:none;">
+    <div class="section-label">Phrase</div>
+    <div class="panel">
+      <div class="form-row">
+        <label>Bars</label>
+        <div class="segment-control" id="phrase-bars-segment">
+          <div class="segment" data-phrase-bars="1">1</div>
+          <div class="segment" data-phrase-bars="2">2</div>
+          <div class="segment" data-phrase-bars="4">4</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Interaction</label>
+        <div class="segment-control" id="phrase-interaction-segment">
+          <div class="segment" data-phrase-interaction="aural-free">Aural recall · free</div>
+          <div class="segment" data-phrase-interaction="aural-intime">Aural recall · in time</div>
+          <div class="segment" data-phrase-interaction="sing">Sing back</div>
+          <div class="segment" data-phrase-interaction="id-degrees">ID degrees</div>
+        </div>
+      </div>
+      <div class="form-row" style="border-bottom:none; padding-bottom: 6px;">
+        <label>Rhythm</label>
+        <div class="degree-scale-chips-wrap"><div id="phrase-rhythm-chips" class="degree-scale-chips"></div></div>
+      </div>
+      <div class="mode-hint">Phrase plays once per card. <strong>Aural recall</strong> waits for you to play it back (free time = sequence only; in time = loops until clean). <strong>Sing back</strong> is self-evaluated. <strong>ID degrees</strong> asks you to tap the degree chips in order.</div>
     </div>
   </div>
 
@@ -587,6 +617,11 @@
 <script src="sound.js"></script>
 <script src="intervals.js"></script>
 <script src="degrees.js"></script>
+<script src="phrase-gen.js"></script>
+<script src="phrase-context.js"></script>
+<script src="phrase-render.js"></script>
+<script src="phrase-play.js"></script>
+<script src="phrases.js"></script>
 <script src="midi.js"></script>
 <script src="app.js"></script>
 </body>

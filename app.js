@@ -75,7 +75,10 @@ const state = {
     eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 },  // see EQ_PRESETS in sound.js
     midiThru: true,              // route MIDI input through the piano engine
     midiIgnoreOctaves: false,    // accept any octave as long as voicing order matches
-    degreeRangeMode: 'auto'      // 'auto' (P4 below root → octave + M3 above) | 'custom' (use rangeLow/High)
+    degreeRangeMode: 'auto',     // 'auto' (P4 below root → octave + M3 above) | 'custom' (use rangeLow/High)
+    phraseBars: 1,               // 1 | 2 | 4
+    phraseInteraction: 'aural-free',  // aural-free | aural-intime | sing | id-degrees
+    phraseAllowedDurations: ['quarter','half','eighthPair']
   }
 };
 
@@ -768,6 +771,10 @@ function applyNotationSettingsToUI() {
   updateRangeCurrentLabel();
   renderIntervalChips();
   applyDegreeConfigToUI();
+  // Phrase drill settings.
+  setActiveSegment('phrase-bars-segment', 'phraseBars', String(ns.phraseBars || 1));
+  setActiveSegment('phrase-interaction-segment', 'phraseInteraction', ns.phraseInteraction || 'aural-free');
+  renderPhraseRhythmChips();
   updateDrillVisibility();
   updateNotationRowVisibility();
 }
@@ -777,7 +784,15 @@ function applyNotationSettingsToUI() {
 // is drill-aware.)
 function updateDrillVisibility() {
   const drill = state.notation.drillType || 'chords';
+  // New attribute-based system: data-drills="degrees phrases" → visible for
+  // either of those drill types. Wins over the legacy class-based rules
+  // when both are present on the same element.
+  document.querySelectorAll('[data-drills]').forEach(el => {
+    const drills = el.dataset.drills.split(/\s+/);
+    el.style.display = drills.includes(drill) ? '' : 'none';
+  });
   document.querySelectorAll('.drill-chords-only').forEach(el => {
+    if (el.hasAttribute('data-drills')) return;
     el.style.display = drill === 'chords' ? '' : 'none';
   });
   document.querySelectorAll('.drill-intervals-only').forEach(el => {
@@ -1076,6 +1091,46 @@ $('degree-scale-select').addEventListener('change', (e) => {
   saveNotationSettings();
   renderDegreeScaleChips();
 });
+
+// Phrase drill — bars / interaction / rhythm pickers.
+$('phrase-bars-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.phraseBars = parseInt(seg.dataset.phraseBars, 10) || 1;
+  setActiveSegment('phrase-bars-segment', 'phraseBars', String(state.notation.phraseBars));
+  saveNotationSettings();
+});
+$('phrase-interaction-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  state.notation.phraseInteraction = seg.dataset.phraseInteraction;
+  setActiveSegment('phrase-interaction-segment', 'phraseInteraction', state.notation.phraseInteraction);
+  saveNotationSettings();
+});
+
+function renderPhraseRhythmChips() {
+  const c = $('phrase-rhythm-chips');
+  if (!c) return;
+  c.replaceChildren();
+  const sel = new Set(state.notation.phraseAllowedDurations || ['quarter','half','eighthPair']);
+  for (const choice of PHRASE_RHYTHM_CHOICES) {
+    const b = document.createElement('button');
+    b.className = 'degree-chip' + (sel.has(choice.id) ? ' active' : '');
+    b.dataset.rhythm = choice.id;
+    b.textContent = choice.label;
+    b.title = choice.id;
+    b.onclick = () => {
+      const next = new Set(state.notation.phraseAllowedDurations || []);
+      if (next.has(choice.id)) next.delete(choice.id); else next.add(choice.id);
+      // Always keep at least one cadential group (quarter or half).
+      if (!next.has('quarter') && !next.has('half')) next.add('quarter');
+      state.notation.phraseAllowedDurations = Array.from(next);
+      saveNotationSettings();
+      renderPhraseRhythmChips();
+    };
+    c.appendChild(b);
+  }
+}
 // Card-level "play note" button — degree drill only.
 $('card-tone-replay').addEventListener('click', async (e) => {
   e.stopPropagation(); // don't bubble to .flash-card (which would advance for chord drill)
@@ -1450,6 +1505,8 @@ function nextCard() {
     card = buildIntervalCard();
   } else if (drill === 'degrees') {
     card = buildDegreeCard();
+  } else if (drill === 'phrases') {
+    card = buildPhraseCard();
   } else {
     if (s.queue.length === 0) {
       s.queue = buildQueue();
@@ -1485,6 +1542,7 @@ function renderCard(card) {
   fc.classList.remove('drill-chords', 'drill-intervals', 'drill-degrees');
   const drillClass = card.drill === 'interval' ? 'drill-intervals'
                    : card.drill === 'degree'   ? 'drill-degrees'
+                   : card.drill === 'phrase'   ? 'drill-phrases'
                                                : 'drill-chords';
   fc.classList.add(drillClass);
 
@@ -1514,6 +1572,13 @@ function renderCard(card) {
       playDegreeTone(card);
     }
     setupMidiForCard(card);
+    return;
+  }
+  if (card.drill === 'phrase') {
+    renderPhraseCard(card);
+    $('stat-progress').textContent = progressText();
+    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    playPhraseCard(card);
     return;
   }
 
@@ -1833,9 +1898,9 @@ $('start-btn').addEventListener('click', () => {
     if (drill !== 'chords') prefetchPianoEngine();
   }
 
-  // Degree drill is chip-driven and forces manual advance. Chord and interval
-  // drills both auto-cycle per the user's advance setting.
-  const effectiveAdvance = (drill === 'degrees') ? 'manual' : advance;
+  // Degree + phrase drills are quiz-driven and force manual advance.
+  // Chord and interval drills auto-cycle per the user's advance setting.
+  const effectiveAdvance = (drill === 'degrees' || drill === 'phrases') ? 'manual' : advance;
 
   const degreeAnchor = drill === 'degrees' ? buildDegreeSessionAnchor() : null;
   if (drill === 'degrees' && !degreeAnchor) {
@@ -1846,6 +1911,7 @@ $('start-btn').addEventListener('click', () => {
     });
     return;
   }
+  const phraseAnchor = drill === 'phrases' ? buildPhraseSessionAnchor() : null;
 
   state.session = {
     mode, advance: effectiveAdvance, target,
@@ -1861,7 +1927,8 @@ $('start-btn').addEventListener('click', () => {
     pausedDuration: 0,
     pauseStartedAt: null,
     degreeAnchor,
-    degreeIntroPlayed: false
+    degreeIntroPlayed: false,
+    phraseAnchor
   };
 
   $('flashcard-view').classList.add('active');
@@ -1947,6 +2014,11 @@ $('flash-card').addEventListener('click', (e) => {
   const card = s.lastCard;
   // Degree drill: chip-driven, never advance on card tap.
   if (card && card.drill === 'degree') {
+    return;
+  }
+  // Phrase drill (v1 stage 5): first tap reveals the staff, second advances.
+  if (card && card.drill === 'phrase') {
+    handlePhraseCardTap(card);
     return;
   }
   const ns = state.notation;
