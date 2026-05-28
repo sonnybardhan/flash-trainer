@@ -62,7 +62,15 @@ function buildPhraseContext(degreeIds, quality, options = {}) {
   // Chord tones — keep only those that are actually in the available pool.
   // A user could pick a pentatonic without the 3rd; we don't invent the 3rd.
   const rawChord = chordToneSemitones(quality);
-  const chordTones = rawChord.filter(s => available.includes(s));
+  let chordTones = rawChord.filter(s => available.includes(s));
+  // If the user's selection has no chord tones at all (e.g. degrees =
+  // ['2','4','6'] with a major chord), the validator's "final must be a
+  // chord tone" rule can never pass and the generator will exhaust its
+  // attempts. Fall back to the tonic if it's in the pool, otherwise the
+  // lowest available pitch — gives the validator something to anchor on.
+  if (chordTones.length === 0 && available.length > 0) {
+    chordTones = available.includes(0) ? [0] : [available[0]];
+  }
 
   // Rule 1: avoid notes = pool members exactly a m2 above a chord tone.
   const chordSet = new Set(chordTones);

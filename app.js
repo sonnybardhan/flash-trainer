@@ -1529,6 +1529,15 @@ function nextCard() {
     card = buildDegreeCard();
   } else if (drill === 'phrases') {
     card = buildPhraseCard();
+    if (!card) {
+      // Generator gave up — surface a clear message and stop the session
+      // instead of crashing on a null card downstream.
+      if (typeof showToast === 'function') {
+        showToast('Couldn’t build a phrase from this scale — broaden the degrees or change the chord quality.', 5000);
+      }
+      endSession(false);
+      return;
+    }
   } else {
     if (s.queue.length === 0) {
       s.queue = buildQueue();
@@ -1560,6 +1569,7 @@ function progressText() {
 }
 
 function renderCard(card) {
+  if (!card) return;  // upstream returned null (e.g. generator gave up)
   const fc = $('flash-card');
   fc.classList.remove('drill-chords', 'drill-intervals', 'drill-degrees');
   const drillClass = card.drill === 'interval' ? 'drill-intervals'
