@@ -78,7 +78,8 @@ const state = {
     degreeRangeMode: 'auto',     // 'auto' (P4 below root → octave + M3 above) | 'custom' (use rangeLow/High)
     phraseBars: 1,               // 1 | 2 | 4
     phraseInteraction: 'aural-free',  // aural-free | aural-intime | sing | id-degrees
-    phraseAllowedDurations: ['quarter','half','eighthPair']
+    phraseAllowedDurations: ['quarter','half','eighthPair'],
+    phraseRestsIncluded: true    // mirrors CET's allowRests boolean
   }
 };
 
@@ -775,6 +776,7 @@ function applyNotationSettingsToUI() {
   setActiveSegment('phrase-bars-segment', 'phraseBars', String(ns.phraseBars || 1));
   setActiveSegment('phrase-interaction-segment', 'phraseInteraction', ns.phraseInteraction || 'aural-free');
   renderPhraseRhythmChips();
+  $('phrase-rests-switch').classList.toggle('on', ns.phraseRestsIncluded !== false);
   updateDrillVisibility();
   updateNotationRowVisibility();
 }
@@ -1107,6 +1109,11 @@ $('phrase-interaction-segment').addEventListener('click', (e) => {
   setActiveSegment('phrase-interaction-segment', 'phraseInteraction', state.notation.phraseInteraction);
   saveNotationSettings();
 });
+$('phrase-rests-switch').addEventListener('click', () => {
+  state.notation.phraseRestsIncluded = state.notation.phraseRestsIncluded === false;
+  $('phrase-rests-switch').classList.toggle('on', state.notation.phraseRestsIncluded);
+  saveNotationSettings();
+});
 
 function renderPhraseRhythmChips() {
   const c = $('phrase-rhythm-chips');
@@ -1115,10 +1122,25 @@ function renderPhraseRhythmChips() {
   const sel = new Set(state.notation.phraseAllowedDurations || ['quarter','half','eighthPair']);
   for (const choice of PHRASE_RHYTHM_CHOICES) {
     const b = document.createElement('button');
-    b.className = 'degree-chip' + (sel.has(choice.id) ? ' active' : '');
+    b.className = 'chip phrase-rhythm-chip' + (sel.has(choice.id) ? ' active' : '');
     b.dataset.rhythm = choice.id;
-    b.textContent = choice.label;
-    b.title = choice.id;
+    b.title = choice.title || choice.id;
+    // Note glyph as an inline SVG built from a hardcoded source. Parse
+    // through an HTML doc so the SVG namespace lands correctly when
+    // imported into the HTML chip element.
+    const svgSrc = PHRASE_RHYTHM_SVG[choice.svg];
+    if (svgSrc) {
+      const wrap = document.createElement('span');
+      wrap.className = 'phrase-rhythm-glyph';
+      const doc = new DOMParser().parseFromString(
+        `<!doctype html><body>${svgSrc}</body>`, 'text/html'
+      );
+      const svgEl = doc.body.querySelector('svg');
+      if (svgEl) wrap.appendChild(document.importNode(svgEl, true));
+      b.appendChild(wrap);
+    } else {
+      b.textContent = choice.id;
+    }
     b.onclick = () => {
       const next = new Set(state.notation.phraseAllowedDurations || []);
       if (next.has(choice.id)) next.delete(choice.id); else next.add(choice.id);

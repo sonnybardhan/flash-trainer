@@ -854,6 +854,15 @@
     border-style: dashed;
   }
 
+  .phrase-rhythm-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 38px;
+    padding: 4px 8px;
+  }
+  .phrase-rhythm-chip svg { display: block; color: var(--text); }
+  .phrase-rhythm-chip.active svg { color: var(--accent-text); }
+  .phrase-rhythm-glyph { display: inline-flex; }
+
   /* ================= ON-SCREEN KEYBOARD ================= */
   .osk {
     position: fixed; left: 0; right: 0; bottom: 0;

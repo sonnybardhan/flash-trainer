@@ -12,16 +12,58 @@
 //   playPhrase, stopPhrase, nextCard.
 // ============================================================
 
-// Use plain text labels — the Unicode music symbols 𝅘𝅥 / 𝅗𝅥 / 𝅘𝅥𝅮 live
-// outside the Basic Multilingual Plane and don't render in the
-// system monospace stack. Short codes are clearer anyway.
+// Rhythm options. Ordered by per-note value: longest first
+// (half = 2 beats, eighth-triplet = 1/3 beat). The Unicode music
+// symbols (𝅘𝅥 etc.) live outside the BMP and don't render in the
+// system font stack; we draw small inline SVG glyphs instead.
 const PHRASE_RHYTHM_CHOICES = [
-  { id: 'quarter',         label: 'Quarter' },
-  { id: 'half',            label: 'Half' },
-  { id: 'eighthPair',      label: '2× 8th' },
-  { id: 'tripletEighths',  label: '3× 8th trip' },
-  { id: 'tripletQuarters', label: '3× qtr trip' }
+  { id: 'half',            beats: 2,   svg: 'half',           title: 'Half note' },
+  { id: 'quarter',         beats: 1,   svg: 'quarter',        title: 'Quarter note' },
+  { id: 'tripletQuarters', beats: 2/3, svg: 'tripletQuarters', title: 'Quarter triplet (3 in 2 beats)' },
+  { id: 'eighthPair',      beats: 0.5, svg: 'eighthPair',     title: 'Two eighths' },
+  { id: 'tripletEighths',  beats: 1/3, svg: 'tripletEighths', title: 'Eighth triplet (3 in 1 beat)' }
 ];
+
+const PHRASE_RHYTHM_SVG = {
+  half: `<svg viewBox="0 0 22 30" width="22" height="30" aria-hidden="true">
+    <ellipse cx="7" cy="24" rx="5.5" ry="3.5" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-18 7 24)"/>
+    <line x1="12.5" y1="23" x2="12.5" y2="3" stroke="currentColor" stroke-width="1.4"/>
+  </svg>`,
+  quarter: `<svg viewBox="0 0 22 30" width="22" height="30" aria-hidden="true">
+    <ellipse cx="7" cy="24" rx="5.5" ry="3.5" fill="currentColor" transform="rotate(-18 7 24)"/>
+    <line x1="12.5" y1="23" x2="12.5" y2="3" stroke="currentColor" stroke-width="1.4"/>
+  </svg>`,
+  eighthPair: `<svg viewBox="0 0 40 30" width="40" height="30" aria-hidden="true">
+    <ellipse cx="6" cy="24" rx="5" ry="3.3" fill="currentColor" transform="rotate(-18 6 24)"/>
+    <ellipse cx="26" cy="24" rx="5" ry="3.3" fill="currentColor" transform="rotate(-18 26 24)"/>
+    <line x1="11" y1="23" x2="11" y2="5" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="31" y1="23" x2="31" y2="5" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="10.3" y1="5" x2="31.7" y2="5" stroke="currentColor" stroke-width="3"/>
+  </svg>`,
+  tripletEighths: `<svg viewBox="0 0 52 36" width="52" height="36" aria-hidden="true">
+    <ellipse cx="6" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 6 30)"/>
+    <ellipse cx="22" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 22 30)"/>
+    <ellipse cx="38" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 38 30)"/>
+    <line x1="10.5" y1="29" x2="10.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="26.5" y1="29" x2="26.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="42.5" y1="29" x2="42.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="9.8" y1="12" x2="43.2" y2="12" stroke="currentColor" stroke-width="2.6"/>
+    <text x="26.5" y="8" font-family="serif" font-size="10" font-style="italic" fill="currentColor" text-anchor="middle">3</text>
+  </svg>`,
+  tripletQuarters: `<svg viewBox="0 0 60 36" width="60" height="36" aria-hidden="true">
+    <ellipse cx="6" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 6 30)"/>
+    <ellipse cx="26" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 26 30)"/>
+    <ellipse cx="46" cy="30" rx="4.5" ry="3" fill="currentColor" transform="rotate(-18 46 30)"/>
+    <line x1="10.5" y1="29" x2="10.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="30.5" y1="29" x2="30.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="50.5" y1="29" x2="50.5" y2="12" stroke="currentColor" stroke-width="1.4"/>
+    <line x1="10.5" y1="12" x2="22.5" y2="9" stroke="currentColor" stroke-width="0.9"/>
+    <line x1="34.5" y1="9" x2="50.5" y2="12" stroke="currentColor" stroke-width="0.9"/>
+    <line x1="10.5" y1="12" x2="10.5" y2="14" stroke="currentColor" stroke-width="0.9"/>
+    <line x1="50.5" y1="12" x2="50.5" y2="14" stroke="currentColor" stroke-width="0.9"/>
+    <text x="28.5" y="12" font-family="serif" font-size="10" font-style="italic" fill="currentColor" text-anchor="middle">3</text>
+  </svg>`
+};
 
 // Default allowed durations — quarter / half / eighth-pair, matching
 // the spec's v1 baseline. The user can opt in to triplets via the
@@ -49,7 +91,15 @@ function buildPhraseSessionAnchor() {
   const degreeIds = (ns.degreeScaleDegrees && ns.degreeScaleDegrees.length)
     ? ns.degreeScaleDegrees
     : ['1','2','3','4','5','6','7'];
-  const context = buildPhraseContext(degreeIds, quality, { includesUpperTonic: true });
+  // Mirror CET's allowRests boolean: when off, swap in the no-rests
+  // policy so the generator never inserts a rest into the phrase.
+  const restPolicy = ns.phraseRestsIncluded === false
+    ? { targetSilenceFraction: 0, maxSilenceFraction: 0 }
+    : undefined; // let buildPhraseContext pick the standard default
+  const context = buildPhraseContext(degreeIds, quality, {
+    includesUpperTonic: true,
+    restPolicy
+  });
 
   return {
     key, quality, rootPitch, context,
