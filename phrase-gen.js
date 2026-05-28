@@ -310,8 +310,13 @@ function validatePhrase(assignments, context, bars) {
   if (durationBeats(final.slot.duration) < 1) {
     return { code: 'finalTooShort', duration: final.slot.duration };
   }
-  // Final on strong beat (beat 1 or 3 in 4/4).
-  if (final.slot.beat !== 1 && final.slot.beat !== 3) {
+  // Final on a strong-ish beat. A half on 1 or 3 is the canonical
+  // cadence, but a quarter on 4 is also musically fine — the bar
+  // boundary itself acts as the cadence. Rejecting beat 4 entirely
+  // makes quarter-only rhythm selections impossible to generate
+  // (every quarter-filled bar ends on beat 4). Allow beats 1, 3,
+  // and 4; only reject beat 2 (mid-bar) as truly non-cadential.
+  if (final.slot.beat === 2) {
     return { code: 'finalOnWeakBeat', beat: final.slot.beat };
   }
 

@@ -2009,6 +2009,10 @@ $('start-btn').addEventListener('click', () => {
   updateLiveAdvanceUI();
   updateLiveSessionUI();
   nextCard();
+  // nextCard can end the session (e.g. phrase generator gave up).
+  // Bail out before kicking off the timer / metronome so they don't
+  // keep ticking with no session attached.
+  if (!state.session) return;
   startTimer();
   if (effectiveAdvance === 'seconds') startAutoAdvance();
   if (state.metronome.enabled) startMetronome();
