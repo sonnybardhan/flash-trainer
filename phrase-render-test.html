@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Phrase render — stage 3 verification</title>
+<style>body{background:#1c1f26;color:#e5e9f0;font-family:ui-monospace,monospace;padding:24px;line-height:1.4;font-size:12px}
+h1,h2{color:#e5e9f0}h2{color:#88c0d0;margin-top:24px}
+.case{margin:8px 0;border:1px solid #353b48;padding:10px;border-radius:8px}
+.compact{color:#8a93a3;margin-bottom:6px}
+svg [stroke]:not([stroke="none"]):not([stroke="transparent"]) { stroke: #e5e9f0 !important; }
+svg [fill]:not([fill="none"]):not([fill="transparent"]) { fill: #e5e9f0 !important; }
+</style></head><body>
+<h1>Phrase render — stage 3</h1>
+<p>Generates phrases from stage 1 and renders them with stage 3. Verifies
+note placement, beams, and tuplet brackets.</p>
+<div id="out"></div>
+
+<script src="vexflow.js"></script>
+<script src="phrase-gen.js"></script>
+<script src="phrase-context.js"></script>
+<script src="phrase-render.js"></script>
+<script>
+const ROOT_C4 = { letter: 'C', accidental: 0, octave: 4 };
+
+// Build a few contexts, generate phrases, render each.
+const setups = [
+  { title: 'C major scale, 1 bar, q+h',
+    ctx: buildPhraseContext(['1','2','3','4','5','6','7'], 'major'),
+    bars: 1, durs: ['quarter', 'half'] },
+  { title: 'C major scale, 2 bars, q+h+ee',
+    ctx: buildPhraseContext(['1','2','3','4','5','6','7'], 'major'),
+    bars: 2, durs: ['quarter', 'half', 'eighthPair'] },
+  { title: 'C major pentatonic, 2 bars, + eighth triplets',
+    ctx: buildPhraseContext(['1','2','3','5','6'], 'major'),
+    bars: 2, durs: ['quarter', 'half', 'eighthPair', 'tripletEighths'] },
+  { title: 'C minor pentatonic, 4 bars, full rhythm',
+    ctx: buildPhraseContext(['1','b3','4','5','b7'], 'minor'),
+    bars: 4, durs: ['quarter', 'half', 'eighthPair', 'tripletEighths', 'tripletQuarters'] }
+];
+
+const out = document.getElementById('out');
+for (const s of setups) {
+  const h = document.createElement('h2');
+  h.textContent = s.title;
+  out.appendChild(h);
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = generatePhrase({ context: s.ctx, bars: s.bars, allowedDurations: s.durs, maxAttempts: 200 });
+      const wrap = document.createElement('div');
+      wrap.className = 'case';
+      const lab = document.createElement('div');
+      lab.className = 'compact';
+      lab.textContent = `${formatPhrase(res.phrase)}  [${res.templateId} · ${res.attempts} attempts]`;
+      wrap.appendChild(lab);
+      const svgHost = document.createElement('div');
+      wrap.appendChild(svgHost);
+      out.appendChild(wrap);
+      renderPhrase(res.phrase, ROOT_C4, svgHost);
+    } catch (e) {
+      const wrap = document.createElement('div');
+      wrap.className = 'case';
+      wrap.textContent = `ERROR: ${e.message}`;
+      out.appendChild(wrap);
+    }
+  }
+}
+document.body.dataset.ready = '1';
+</script>
+</body></html>
