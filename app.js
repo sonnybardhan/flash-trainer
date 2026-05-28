@@ -1676,8 +1676,24 @@ function renderCard(card) {
     if (!state.session.degreeIntroPlayed) {
       state.session.degreeIntroPlayed = true;
       playDegreeIntroThenTone(card);
-    } else {
+    } else if (!card.answered) {
+      // Already-solved cards don't replay the tone — they restore visuals.
       playDegreeTone(card);
+    }
+    // Restore the solved-state view if the user navigated back here.
+    if (card.answered && typeof renderTriadPlusTone === 'function') {
+      renderTriadPlusTone(card.triadPitches, card.tonePitch, $('card-notation'));
+      const label = $('card-reveal-label');
+      if (label && typeof DEGREE_DEFS !== 'undefined') {
+        label.textContent = (DEGREE_DEFS[card.degreeId] || {}).label || '';
+        label.classList.remove('hidden', 'wrong');
+        label.classList.add('correct');
+      }
+      // Mark the correct chip + disable all so user sees the past answer.
+      $('card-answer-chips').querySelectorAll('.answer-chip').forEach(c => {
+        c.classList.add('disabled');
+        if (c.dataset.degreeId === card.degreeId) c.classList.add('correct');
+      });
     }
     setupMidiForCard(card);
     return;
@@ -1686,8 +1702,14 @@ function renderCard(card) {
     renderPhraseCard(card);
     $('stat-progress').textContent = progressText();
     fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
-    playPhraseCard(card);
-    setupMidiForCard(card);
+    // Already-solved cards (navigated back to): show the staff
+    // immediately, skip the playback + matcher arming.
+    if (card.answered || card.revealed) {
+      if (typeof revealPhraseCard === 'function') revealPhraseCard(card);
+    } else {
+      playPhraseCard(card);
+      setupMidiForCard(card);
+    }
     if (typeof showOnScreenKeyboardFor === 'function') showOnScreenKeyboardFor(card);
     if ($('phrase-ref-btn')) $('phrase-ref-btn').style.display = '';
     return;

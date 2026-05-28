@@ -938,49 +938,76 @@
 
   /* When the on-screen keyboard is visible, push the flashcard
      content (incl. pause/end footer) above it so nothing hides
-     behind the dock. */
+     behind the dock. Padding matches keyboard height per breakpoint. */
   body.osk-active #flashcard-view { padding-bottom: 150px; }
+  @media (min-width: 900px)  { body.osk-active #flashcard-view { padding-bottom: 170px; } }
+  @media (min-width: 1400px) { body.osk-active #flashcard-view { padding-bottom: 190px; } }
 
   /* ================= ON-SCREEN KEYBOARD ================= */
+  /* Key dimensions are driven by CSS vars so we can scale up cleanly
+     on wider screens without losing proportion (white:black ≈ 1.6:1).
+     Black-key margin is always (black-width / 2) negative each side
+     so it overlaps half-into the surrounding white keys. */
   .osk {
+    --osk-white-w: 36px;
+    --osk-white-h: 110px;
+    --osk-black-w: 22px;
+    --osk-black-h: 68px;
+
     position: fixed; left: 0; right: 0; bottom: 0;
     z-index: 55;
     padding: 10px 0 env(safe-area-inset-bottom) 0;
     background: linear-gradient(180deg, transparent 0%, var(--bg) 30%, var(--bg) 100%);
     border-top: 1px solid var(--border);
-    display: block;
-    /* Horizontal scroll: keys are fixed-width so the keyboard's total
-       width is content-driven. Wider screens show more keys without
-       distorting them; narrow screens scroll left/right. */
+    /* Flex with safe-center: keyboard centers horizontally when the
+       grid is narrower than the viewport, and start-aligns (scrollable)
+       when it overflows. Lets the user scroll without clipping. */
+    display: flex;
+    justify-content: safe center;
+    align-items: stretch;
     overflow-x: auto;
     overflow-y: hidden;
     overscroll-behavior-x: contain;
     scrollbar-width: thin;
+  }
+  @media (min-width: 900px) {
+    .osk {
+      --osk-white-w: 42px;
+      --osk-white-h: 130px;
+      --osk-black-w: 26px;
+      --osk-black-h: 80px;
+    }
+  }
+  @media (min-width: 1400px) {
+    .osk {
+      --osk-white-w: 50px;
+      --osk-white-h: 150px;
+      --osk-black-w: 30px;
+      --osk-black-h: 92px;
+    }
   }
   .osk::-webkit-scrollbar { height: 6px; }
   .osk::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   .osk-grid {
     position: relative;
     display: flex; align-items: flex-start;
-    height: 110px;
+    height: var(--osk-white-h);
     gap: 0;
     user-select: none;
     -webkit-user-select: none;
     padding: 0 14px;
-    width: max-content;     /* let total width be driven by children */
+    width: max-content;
+    flex: 0 0 auto;
   }
   .osk-key {
     appearance: none;
     cursor: pointer;
     padding: 0;
-    flex: 0 0 auto;         /* fixed widths — never stretch to fill */
+    flex: 0 0 auto;
   }
-  /* White keys: actual white, dark text. Stay on the bottom; the black
-     keys nest INSIDE them at the top via negative margin + z-index.
-     Fixed width keeps proportion consistent across all screen sizes. */
   .osk-key.white {
-    width: 36px;
-    height: 110px;
+    width: var(--osk-white-w);
+    height: var(--osk-white-h);
     background: #f5f3ed;
     color: #2a2a2a;
     border: 1px solid #9a958b;
@@ -989,15 +1016,13 @@
     padding-bottom: 6px;
     box-shadow: inset 0 -3px 0 rgba(0,0,0,0.08);
   }
-  /* Black keys: actual black, sit ON TOP of the adjacent white keys,
-     overlapping their upper area. Negative margins overlap into the
-     surrounding whites. Width tuned to a fixed proportion of white. */
   .osk-key.black {
     position: relative;
-    margin-left: -11px;
-    margin-right: -11px;
-    width: 22px;
-    height: 68px;
+    width: var(--osk-black-w);
+    height: var(--osk-black-h);
+    /* Overlap half a black-key width into each surrounding white. */
+    margin-left: calc(var(--osk-black-w) / -2);
+    margin-right: calc(var(--osk-black-w) / -2);
     background: #1a1a1a;
     color: #e0e0e0;
     border: 1px solid #050505;
