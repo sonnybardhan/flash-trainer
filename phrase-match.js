@@ -100,11 +100,19 @@ function _scheduleIteration() {
   const r = _inTimeRun;
   r.iteration++;
 
-  // 1) Play the demo immediately, with the harmonic chord pad if the
-  // session anchor has chord tones.
-  const anchor = state.session && state.session.phraseAnchor;
-  const tones = anchor && anchor.context && anchor.context.chordTones;
-  const chord = (tones && tones.length) ? { tones, octaveOffset: -1, volume: 0.55 } : null;
+  // 1) Play the demo immediately. The chord pad is a session-level
+  // intro (matches degree drill behaviour): only the very first
+  // demo of the very first card gets it; subsequent demos and loop
+  // iterations are melody-only. Use the ♪ Ref button to re-hear.
+  let chord = null;
+  if (state.session && !state.session.phraseChordIntroPlayed) {
+    const anchor = state.session.phraseAnchor;
+    const tones = anchor && anchor.context && anchor.context.chordTones;
+    if (tones && tones.length) {
+      chord = { tones, octaveOffset: -1, volume: 0.55 };
+      state.session.phraseChordIntroPlayed = true;
+    }
+  }
   playPhrase(r.card.phrase, r.card.rootPitch, r.bpm, { chord }).catch(() => {});
 
   // 2) After demo + count-in, open the echo window.

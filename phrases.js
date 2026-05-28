@@ -239,13 +239,20 @@ function revealPhraseCard(card) {
   renderPhrase(card.phrase, card.rootPitch, $('card-notation'));
 }
 
-// Pull chord tones + scale semitones off the active session anchor.
-// Used by both the per-card playback and the reference button.
+// Chord pad options for a card's playback. Returns null UNLESS this
+// is the first playback of the session — the chord is an intro, not
+// a per-card loop. After it fires once, subsequent cards play
+// melody-only. Users who want to hear the chord again use the ♪ Ref
+// button.
 function _phraseChordOpts(card) {
   if (!card || !card.phrase) return null;
-  const anchor = state.session && state.session.phraseAnchor;
+  if (!state.session || state.session.phraseChordIntroPlayed) return null;
+  const anchor = state.session.phraseAnchor;
   const tones = anchor && anchor.context && anchor.context.chordTones;
   if (!tones || tones.length === 0) return null;
+  // Consume the flag immediately so retry calls (e.g. sing-back's second
+  // play) don't double-up the chord.
+  state.session.phraseChordIntroPlayed = true;
   return { tones, octaveOffset: -1, volume: 0.55 };
 }
 
@@ -272,13 +279,13 @@ async function playPhraseCard(card) {
 async function runSingBackForCard(card) {
   const bpm = (state.metronome && state.metronome.bpm) || 80;
   const beatSec = 60 / Math.max(30, bpm);
-  const chord = _phraseChordOpts(card);
-  await playPhrase(card.phrase, card.rootPitch, bpm, { chord });
-  // Pause for the user to sing back.
+  // First play uses the intro chord if it hasn't fired yet; the
+  // answer play that follows is always melody-only.
+  await playPhrase(card.phrase, card.rootPitch, bpm, { chord: _phraseChordOpts(card) });
   const silenceSec = card.bars * 4 * beatSec;
   await new Promise(r => setTimeout(r, silenceSec * 1000));
   if (!state.session || state.session.lastCard !== card) return;
-  await playPhrase(card.phrase, card.rootPitch, bpm, { chord });
+  await playPhrase(card.phrase, card.rootPitch, bpm);
   revealPhraseCard(card);
 }
 

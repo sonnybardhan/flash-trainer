@@ -1995,7 +1995,8 @@ $('start-btn').addEventListener('click', () => {
     pauseStartedAt: null,
     degreeAnchor,
     degreeIntroPlayed: false,
-    phraseAnchor
+    phraseAnchor,
+    phraseChordIntroPlayed: false
   };
 
   $('flashcard-view').classList.add('active');
@@ -2214,8 +2215,10 @@ $('replay-btn').addEventListener('click', async () => {
     return;
   }
   if (card.drill === 'phrase') {
+    // Replay = melody only. Chord is a session intro played once; the
+    // ♪ Ref button is the way to re-hear it on demand.
     const bpm = (state.metronome && state.metronome.bpm) || 80;
-    await playPhrase(card.phrase, card.rootPitch, bpm, { chord: _phraseChordOpts(card) });
+    await playPhrase(card.phrase, card.rootPitch, bpm);
     return;
   }
   const pitches = computePlaybackPitches(card);
