@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Phrase playback — stage 4 verification</title>
+<style>body{background:#1c1f26;color:#e5e9f0;font-family:ui-monospace,monospace;padding:24px;line-height:1.5}
+h1,h2{color:#e5e9f0}h2{color:#88c0d0;margin-top:24px}
+.case{margin:8px 0;border:1px solid #353b48;padding:12px;border-radius:8px;display:flex;gap:12px;align-items:flex-start}
+.col-svg{flex:1}
+.compact{color:#8a93a3;margin-bottom:6px;font-size:12px}
+button{background:#88c0d0;color:#1c1f26;border:none;border-radius:6px;padding:8px 14px;font-family:inherit;font-size:12px;cursor:pointer}
+button:active{background:#5e81ac}
+svg [stroke]:not([stroke="none"]):not([stroke="transparent"]) { stroke: #e5e9f0 !important; }
+svg [fill]:not([fill="none"]):not([fill="transparent"]) { fill: #e5e9f0 !important; }
+</style></head><body>
+<h1>Phrase playback — stage 4</h1>
+<p>Click <b>Play</b> on any phrase to hear it. BPM is 80. Stop button kills the
+current playback so you can switch phrases without overlap.</p>
+<button id="stop-all" style="margin-bottom:16px">Stop all</button>
+<div id="out"></div>
+
+<script src="vexflow.js"></script>
+<script src="webaudiofont-player.js"></script>
+<script src="piano-fluidr3.js"></script>
+<script>
+  // Minimal globals so sound.js works standalone in this test.
+  window.state = { notation: { pianoPreset: 'fluidr3', eq: { preset: 'warm' } } };
+  window.audioCtx = null;
+  window.$ = (id) => document.getElementById(id);
+</script>
+<script src="sound.js"></script>
+<script src="phrase-gen.js"></script>
+<script src="phrase-context.js"></script>
+<script src="phrase-render.js"></script>
+<script src="phrase-play.js"></script>
+<script>
+const ROOT_C4 = { letter: 'C', accidental: 0, octave: 4 };
+const BPM = 80;
+
+const setups = [
+  { title: 'C major scale, 2 bars',
+    ctx: buildPhraseContext(['1','2','3','4','5','6','7'], 'major'),
+    bars: 2, durs: ['quarter', 'half', 'eighthPair'] },
+  { title: 'C major pentatonic, 2 bars, + eighth triplets',
+    ctx: buildPhraseContext(['1','2','3','5','6'], 'major'),
+    bars: 2, durs: ['quarter', 'half', 'eighthPair', 'tripletEighths'] },
+  { title: 'C minor pentatonic, 4 bars, full rhythm',
+    ctx: buildPhraseContext(['1','b3','4','5','b7'], 'minor'),
+    bars: 4, durs: ['quarter', 'half', 'eighthPair', 'tripletEighths', 'tripletQuarters'] }
+];
+
+const out = document.getElementById('out');
+for (const s of setups) {
+  const h = document.createElement('h2');
+  h.textContent = s.title;
+  out.appendChild(h);
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = generatePhrase({ context: s.ctx, bars: s.bars, allowedDurations: s.durs, maxAttempts: 200 });
+      const wrap = document.createElement('div');
+      wrap.className = 'case';
+      const col = document.createElement('div');
+      col.className = 'col-svg';
+      const lab = document.createElement('div');
+      lab.className = 'compact';
+      lab.textContent = formatPhrase(res.phrase);
+      col.appendChild(lab);
+      const svgHost = document.createElement('div');
+      col.appendChild(svgHost);
+      wrap.appendChild(col);
+      const playBtn = document.createElement('button');
+      playBtn.textContent = '▶ Play';
+      playBtn.onclick = async () => {
+        if (!window.audioCtx) {
+          window.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+        await playPhrase(res.phrase, ROOT_C4, BPM);
+      };
+      wrap.appendChild(playBtn);
+      out.appendChild(wrap);
+      renderPhrase(res.phrase, ROOT_C4, svgHost);
+    } catch (e) {
+      const wrap = document.createElement('div');
+      wrap.className = 'case';
+      wrap.textContent = `ERROR: ${e.message}`;
+      out.appendChild(wrap);
+    }
+  }
+}
+
+document.getElementById('stop-all').onclick = () => stopPhrase();
+document.body.dataset.ready = '1';
+</script>
+</body></html>
