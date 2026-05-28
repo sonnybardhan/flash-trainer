@@ -112,14 +112,16 @@ function revealPhraseCard(card) {
 }
 
 async function playPhraseCard(card) {
-  // In-time aural recall has its own scheduler — it handles the demo
-  // playback as part of the loop, so we skip the standalone play here.
   if (card.interaction === 'aural-intime') {
     startInTimeForCard(card);
     return;
   }
   if (card.interaction === 'sing') {
     runSingBackForCard(card);
+    return;
+  }
+  if (card.interaction === 'id-degrees') {
+    startIdDegreesForCard(card);
     return;
   }
   const bpm = (state.metronome && state.metronome.bpm) || 80;
@@ -164,10 +166,93 @@ function startInTimeForCard(card) {
   });
 }
 
+// Map a semitone (0..11+) to a degree id, using pitch-class equivalence
+// so the upper tonic (semitone 12) collapses to '1'.
+const PHRASE_SEMI_TO_DEGREE = {
+  0:'1', 1:'b2', 2:'2', 3:'b3', 4:'3', 5:'4',
+  6:'#4', 7:'5', 8:'b6', 9:'6', 10:'b7', 11:'7'
+};
+function _phraseEventToDegreeId(ev) {
+  const semi = ev.semitone + 12 * (ev.octaveOffset || 0);
+  return PHRASE_SEMI_TO_DEGREE[((semi % 12) + 12) % 12];
+}
+
+// ID-degrees: play the phrase, then ask the user to tap the degree
+// chips in the order heard. Chips are restricted to the user's
+// available scale degrees (same as the degree drill's chip set).
+async function startIdDegreesForCard(card) {
+  const bpm = (state.metronome && state.metronome.bpm) || 80;
+  await playPhrase(card.phrase, card.rootPitch, bpm);
+  if (!state.session || state.session.lastCard !== card) return;
+  const expectedDegrees = card.phrase.events
+    .filter(e => e.kind === 'note')
+    .map(_phraseEventToDegreeId);
+  card.expectedDegrees = expectedDegrees;
+  card.degreeIndex = 0;
+  card.wrongDegreeTaps = 0;
+  _renderPhraseIdDegreeChips(card);
+}
+
+function _renderPhraseIdDegreeChips(card) {
+  const c = $('card-answer-chips');
+  c.replaceChildren();
+  const available = (state.notation.degreeScaleDegrees && state.notation.degreeScaleDegrees.length)
+    ? state.notation.degreeScaleDegrees
+    : ['1','2','3','4','5','6','7'];
+  // Visual order — chromatic so the layout stays stable across scales.
+  const VISUAL = ['1','b2','2','b3','3','4','#4','5','b6','6','b7','7'];
+  const ordered = VISUAL.filter(d => available.includes(d));
+  for (const id of ordered) {
+    const b = document.createElement('button');
+    b.className = 'answer-chip';
+    b.dataset.degreeId = id;
+    b.textContent = (typeof DEGREE_DEFS !== 'undefined' && DEGREE_DEFS[id]) ? DEGREE_DEFS[id].label : id;
+    b.onclick = () => _handlePhraseIdDegreeTap(card, id);
+    c.appendChild(b);
+  }
+  const label = $('card-reveal-label');
+  label.textContent = `Tap each note's degree in order  (1 / ${card.expectedDegrees.length})`;
+  label.classList.remove('hidden', 'wrong', 'correct');
+}
+
+function _handlePhraseIdDegreeTap(card, pickedId) {
+  if (card.answered) return;
+  const expected = card.expectedDegrees[card.degreeIndex];
+  const chip = $('card-answer-chips').querySelector(`.answer-chip[data-degree-id="${pickedId}"]`);
+  if (pickedId !== expected) {
+    card.wrongDegreeTaps++;
+    if (chip) {
+      chip.classList.add('wrong');
+      setTimeout(() => chip.classList.remove('wrong'), 350);
+    }
+    return;
+  }
+  // Correct — advance index, flash green, update label.
+  card.degreeIndex++;
+  if (chip) {
+    chip.classList.add('correct');
+    setTimeout(() => chip.classList.remove('correct'), 250);
+  }
+  const remaining = card.expectedDegrees.length - card.degreeIndex;
+  const label = $('card-reveal-label');
+  if (remaining > 0) {
+    label.textContent = `${card.degreeIndex + 1} / ${card.expectedDegrees.length}`;
+  } else {
+    card.answered = true;
+    card.correct = true;
+    label.textContent = '✓';
+    label.classList.add('correct');
+    revealPhraseCard(card);
+    setTimeout(() => {
+      if (state.session && state.session.lastCard === card) nextCard();
+    }, 700);
+  }
+}
+
 // v1 stage 5 handler: tap reveals the staff; second tap advances.
 function handlePhraseCardTap(card) {
-  // In-time mode is loop-driven — don't allow a stray tap to interrupt.
-  if (card.interaction === 'aural-intime') {
+  // In-time + ID-degrees are quiz-driven — only advance once answered.
+  if (card.interaction === 'aural-intime' || card.interaction === 'id-degrees') {
     if (card.answered) nextCard();
     return;
   }
