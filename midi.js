@@ -26,6 +26,14 @@ const midiState = {
 };
 
 const MIDI_SEQUENCE_BUFFER = 12;
+// Debounce window for advancing onto a same-pitch consecutive note in
+// karaoke-style sequence matching. A single press should never
+// advance through two adjacent same-pitch expected notes, whether
+// the second event is a hardware duplicate or just the player
+// re-triggering faster than this window. At 80ms the user can still
+// play eighth notes at ~375 BPM (160 ms per eighth) without false-
+// positives, which is well above any realistic sight-reading tempo.
+const PHRASE_SAME_PC_DEBOUNCE_MS = 80;
 
 function pitchToMidi(p) {
   return pitchSemitones(p) + 12;
@@ -163,6 +171,13 @@ function evaluateMatch(latestNote) {
   // that aren't the *next* expected are simply ignored (no penalty).
   // Calls onProgress(index, total) after each advance so the UI can
   // light the matching dot.
+  //
+  // Same-pitch debounce: if the previous successful advance was the
+  // same pitch class less than PHRASE_SAME_PC_DEBOUNCE_MS ago, the
+  // press is ignored. This stops one physical press from filling two
+  // adjacent identical-pitch slots — whether the duplicate event
+  // comes from a hardware multi-port keyboard or from the user trying
+  // to play the second note before their finger has cleared the first.
   if (m.mode === 'phraseSequenceProgress') {
     if (latestNote == null) return;
     const expected = m.expected;
@@ -170,8 +185,16 @@ function evaluateMatch(latestNote) {
     if (idx >= expected.length) return;
     const pc = ((latestNote % 12) + 12) % 12;
     if (pc === expected[idx]) {
+      const now = (typeof performance !== 'undefined' && performance.now)
+        ? performance.now() : Date.now();
+      if (m._lastAdvancePc === pc &&
+          (now - (m._lastAdvanceAt || 0)) < PHRASE_SAME_PC_DEBOUNCE_MS) {
+        return; // ignore the duplicate
+      }
       idx += 1;
       m.progress = idx;
+      m._lastAdvancePc = pc;
+      m._lastAdvanceAt = now;
       if (typeof m.onProgress === 'function') m.onProgress(idx, expected.length);
       if (idx >= expected.length) {
         fireCorrect();
