@@ -12,12 +12,15 @@
 //   playPhrase, stopPhrase, nextCard.
 // ============================================================
 
+// Use plain text labels — the Unicode music symbols 𝅘𝅥 / 𝅗𝅥 / 𝅘𝅥𝅮 live
+// outside the Basic Multilingual Plane and don't render in the
+// system monospace stack. Short codes are clearer anyway.
 const PHRASE_RHYTHM_CHOICES = [
-  { id: 'quarter',         label: '𝅘𝅥' },
-  { id: 'half',            label: '𝅗𝅥' },
-  { id: 'eighthPair',      label: '𝅘𝅥𝅮𝅘𝅥𝅮' },
-  { id: 'tripletEighths',  label: '³𝅘𝅥𝅮' },
-  { id: 'tripletQuarters', label: '³𝅘𝅥' }
+  { id: 'quarter',         label: 'Quarter' },
+  { id: 'half',            label: 'Half' },
+  { id: 'eighthPair',      label: '2× 8th' },
+  { id: 'tripletEighths',  label: '3× 8th trip' },
+  { id: 'tripletQuarters', label: '3× qtr trip' }
 ];
 
 // Default allowed durations — quarter / half / eighth-pair, matching

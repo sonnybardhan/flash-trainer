@@ -258,7 +258,7 @@
 
   /* Drill type pill: equal-width segments, slightly larger touch area */
   .drill-segment {
-    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    display: grid; grid-template-columns: repeat(4, 1fr);
   }
   .drill-segment .segment {
     text-align: center; padding: 9px 4px; font-size: 12px;
