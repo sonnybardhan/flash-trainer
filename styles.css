@@ -854,6 +854,28 @@
     border-style: dashed;
   }
 
+  /* Session-mode dropdown — needs a visible chevron because the
+     native picker arrow gets stripped by appearance:none. */
+  .mode-select-styled {
+    padding: 8px 32px 8px 12px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-family: var(--sans);
+    font-size: 14px;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+                      linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position: right 14px center, right 9px center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  .mode-select-styled:hover { border-color: var(--border-strong); }
+  .mode-select-styled:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   .phrase-rhythm-chip {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 38px;
