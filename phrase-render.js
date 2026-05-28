@@ -109,10 +109,22 @@ function _groupByBar(phrase) {
 function renderPhrase(phrase, rootPitch, container, opts = {}) {
   const VF = Vex.Flow;
   const clef = opts.clef || 'treble';
-  const perBarWidth = opts.perBarWidth || 240;
-  const leadPad = 60; // room for clef + time sig
-  const totalWidth = leadPad + phrase.bars * perBarWidth + 24;
   const height = 160;
+
+  // Dynamic per-bar width based on note density. Reserve ~32px per
+  // event for breathing room, with a 220px floor so a 1-bar phrase
+  // never looks cramped. The first bar gets an extra clef/time-sig
+  // allowance (computed from the actual rendered stave below).
+  const bars = _groupByBar(phrase);
+  const perEventPx = 32;
+  const minBarWidth = 220;
+  const leadingClefAllowance = 70;  // clef + 4/4 time signature width
+  const trailingPad = 18;
+  const barWidths = bars.map(({ events }, i) => {
+    const base = Math.max(minBarWidth, events.length * perEventPx + 32);
+    return i === 0 ? base + leadingClefAllowance : base;
+  });
+  const totalWidth = barWidths.reduce((s, w) => s + w, 0) + 24;
 
   container.replaceChildren();
   const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
@@ -127,20 +139,18 @@ function renderPhrase(phrase, rootPitch, container, opts = {}) {
 
   const tuplets = [];      // VF.Tuplet[]
   const beams = [];        // VF.Beam[]
-  let prevStave = null;
 
-  const bars = _groupByBar(phrase);
+  // Lay out staves left-to-right, each at the width we computed above.
+  let xCursor = 8;
   bars.forEach(({ bar, events }, barIdx) => {
-    // Stave: first bar gets clef + time sig.
-    const xStart = barIdx === 0 ? 8 : leadPad + barIdx * perBarWidth + 8;
-    const staveWidth = barIdx === 0 ? leadPad + perBarWidth : perBarWidth;
-    const stave = new VF.Stave(xStart, 16, staveWidth);
+    const staveWidth = barWidths[barIdx];
+    const stave = new VF.Stave(xCursor, 16, staveWidth);
     if (barIdx === 0) {
       stave.addClef(clef);
       stave.addTimeSignature('4/4');
     }
     stave.setContext(ctx).draw();
-    prevStave = stave;
+    xCursor += staveWidth;
 
     // Build VF.StaveNote per event.
     const tripletBuckets = new Map(); // tripletGroupId → array of notes
@@ -206,9 +216,11 @@ function renderPhrase(phrase, rootPitch, container, opts = {}) {
     const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
     voice.setStrict(false);
     voice.addTickables(notes);
-    // Leave breathing room for the trailing barline so the last
-    // notehead never overhangs into the next bar.
-    new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 50);
+    // Use the stave's *actual* note area (after the clef + time sig
+    // have been laid out) so the formatter knows exactly how much
+    // room it has. Leaves a small pad before the trailing barline.
+    const noteAreaWidth = stave.getNoteEndX() - stave.getNoteStartX() - trailingPad;
+    new VF.Formatter().joinVoices([voice]).format([voice], Math.max(40, noteAreaWidth));
     voice.draw(ctx, stave);
   });
 
