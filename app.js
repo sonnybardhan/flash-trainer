@@ -1580,8 +1580,11 @@ function renderCard(card) {
     fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
     playPhraseCard(card);
     setupMidiForCard(card);
+    if (typeof showOnScreenKeyboardFor === 'function') showOnScreenKeyboardFor(card);
     return;
   }
+  // Non-phrase drills: ensure the keyboard is hidden.
+  if (typeof hideOnScreenKeyboard === 'function') hideOnScreenKeyboard();
 
   // Chord drill — existing behavior.
   $('card-answer-chips').replaceChildren();
@@ -2145,6 +2148,7 @@ function endSession(save = true) {
   if (typeof stopAllPianoNotes === 'function') stopAllPianoNotes();
   if (typeof stopInTimeRecall === 'function') stopInTimeRecall();
   if (typeof stopPhrase === 'function') stopPhrase();
+  if (typeof hideOnScreenKeyboard === 'function') hideOnScreenKeyboard();
   if (!state.session) return;
 
   if (save) {

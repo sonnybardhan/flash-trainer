@@ -854,6 +854,62 @@
     border-style: dashed;
   }
 
+  /* ================= ON-SCREEN KEYBOARD ================= */
+  .osk {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 55;
+    padding: 10px 14px env(safe-area-inset-bottom) 14px;
+    background: linear-gradient(180deg, transparent 0%, var(--bg) 30%, var(--bg) 100%);
+    border-top: 1px solid var(--border);
+    display: block;
+  }
+  .osk-grid {
+    position: relative;
+    display: flex; align-items: flex-end;
+    height: 110px;
+    gap: 1px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .osk-key {
+    appearance: none;
+    border: 1px solid var(--border-strong);
+    cursor: pointer;
+    padding: 0;
+    color: var(--text-faint);
+  }
+  .osk-key.white {
+    flex: 1 1 0; min-width: 24px;
+    height: 110px;
+    background: var(--surface);
+    border-radius: 0 0 6px 6px;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 6px;
+  }
+  .osk-key.black {
+    position: relative;
+    margin-left: -14px;
+    margin-right: -14px;
+    width: 28px;
+    height: 70px;
+    background: var(--surface-2);
+    border-radius: 0 0 4px 4px;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .osk-key.white.pressed {
+    background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    border-color: var(--accent);
+  }
+  .osk-key.black.pressed {
+    background: color-mix(in srgb, var(--accent) 50%, var(--surface-2));
+    border-color: var(--accent);
+  }
+  .osk-label {
+    font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+    letter-spacing: 0.5px;
+  }
+
   .toast {
     position: fixed;
     bottom: 56px;
