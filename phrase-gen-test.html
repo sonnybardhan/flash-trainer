@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Phrase generator — stage 1 verification</title>
+<style>body{background:#1c1f26;color:#e5e9f0;font-family:ui-monospace,monospace;padding:24px;line-height:1.5}
+h2{color:#88c0d0;margin-top:28px}
+.case{margin:6px 0;border:1px solid #353b48;padding:8px 12px;border-radius:6px}
+.idx{color:#5d6678;display:inline-block;min-width:24px}
+.tpl{color:#8a93a3;font-size:11px;margin-left:8px}
+.body{color:#e5e9f0;font-size:13px}
+.fail{color:#bf616a}
+</style></head><body>
+<h1>Phrase generator — stage 1</h1>
+<p>20 phrases per context. Format: <code>degree+duration</code> per event, <code>|</code> between bars, <code>_</code> prefix = rest.</p>
+<div id="out"></div>
+
+<script src="phrase-gen.js"></script>
+<script>
+const cases = [
+  {
+    title: 'C major scale, 1 bar, q+h only',
+    bars: 1,
+    allowedDurations: ['quarter', 'half'],
+    context: {
+      available:   [0, 2, 4, 5, 7, 9, 11],            // C D E F G A B
+      chordTones:  [0, 4, 7],                          // C E G
+      avoidNotes:  [5],                                // F
+      resolvesTo:  { 2: [0, 4], 5: [4], 9: [7], 11: [0] },
+      restPolicy:  { targetSilenceFraction: 0, maxSilenceFraction: 0 },
+      tonic: 0, includesUpperTonic: true
+    }
+  },
+  {
+    title: 'C major scale, 2 bars, q+h+ee',
+    bars: 2,
+    allowedDurations: ['quarter', 'half', 'eighthPair'],
+    context: {
+      available:   [0, 2, 4, 5, 7, 9, 11],
+      chordTones:  [0, 4, 7],
+      avoidNotes:  [5],
+      resolvesTo:  { 2: [0, 4], 5: [4], 9: [7], 11: [0] },
+      restPolicy:  { targetSilenceFraction: 0.12, maxSilenceFraction: 0.25 },
+      tonic: 0, includesUpperTonic: true
+    }
+  },
+  {
+    title: 'C major pentatonic, 2 bars, q+h+ee + eighth triplets',
+    bars: 2,
+    allowedDurations: ['quarter', 'half', 'eighthPair', 'tripletEighths'],
+    context: {
+      available:   [0, 2, 4, 7, 9],                    // C D E G A
+      chordTones:  [0, 4, 7],
+      avoidNotes:  [],
+      resolvesTo:  { 2: [0, 4], 9: [7] },
+      restPolicy:  { targetSilenceFraction: 0.12, maxSilenceFraction: 0.25 },
+      tonic: 0, includesUpperTonic: true
+    }
+  },
+  {
+    title: 'C minor pentatonic, 4 bars, full rhythm set incl. tripletQuarters',
+    bars: 4,
+    allowedDurations: ['quarter', 'half', 'eighthPair', 'tripletEighths', 'tripletQuarters'],
+    context: {
+      available:   [0, 3, 5, 7, 10],                   // C Eb F G Bb
+      chordTones:  [0, 3, 7],
+      avoidNotes:  [],
+      resolvesTo:  { 5: [3, 7], 10: [7] },
+      restPolicy:  { targetSilenceFraction: 0.12, maxSilenceFraction: 0.25 },
+      tonic: 0, includesUpperTonic: true
+    }
+  },
+  {
+    title: 'C major triad pool (chord tones only), 1 bar, all rhythms',
+    bars: 1,
+    allowedDurations: ['quarter', 'half', 'eighthPair', 'tripletEighths', 'tripletQuarters'],
+    context: {
+      available:   [0, 4, 7],
+      chordTones:  [0, 4, 7],
+      avoidNotes:  [],
+      resolvesTo:  {},
+      restPolicy:  { targetSilenceFraction: 0, maxSilenceFraction: 0 },
+      tonic: 0, includesUpperTonic: true
+    }
+  }
+];
+
+const out = document.getElementById('out');
+for (const c of cases) {
+  const h = document.createElement('h2');
+  h.textContent = c.title;
+  out.appendChild(h);
+
+  let okCount = 0, attemptsSum = 0, failures = 0;
+  for (let i = 1; i <= 20; i++) {
+    try {
+      const res = generatePhrase({
+        context: c.context,
+        bars: c.bars,
+        allowedDurations: c.allowedDurations,
+        maxAttempts: 200
+      });
+      attemptsSum += res.attempts;
+      okCount++;
+      const div = document.createElement('div');
+      div.className = 'case';
+      const idxSpan = document.createElement('span');
+      idxSpan.className = 'idx';
+      idxSpan.textContent = `${String(i).padStart(2,' ')}.`;
+      const bodySpan = document.createElement('span');
+      bodySpan.className = 'body';
+      bodySpan.textContent = formatPhrase(res.phrase);
+      const tplSpan = document.createElement('span');
+      tplSpan.className = 'tpl';
+      tplSpan.textContent = `[${res.templateId} · ${res.attempts} attempts]`;
+      div.append(idxSpan, bodySpan, tplSpan);
+      out.appendChild(div);
+    } catch (e) {
+      failures++;
+      const div = document.createElement('div');
+      div.className = 'case fail';
+      div.textContent = `${String(i).padStart(2,' ')}. FAILED: ${e.message}`;
+      out.appendChild(div);
+    }
+  }
+  const summary = document.createElement('div');
+  summary.style.color = '#88c0d0';
+  summary.style.marginTop = '6px';
+  summary.textContent = `→ ${okCount}/20 generated · avg ${(attemptsSum/Math.max(1,okCount)).toFixed(1)} attempts` +
+                         (failures ? ` · ${failures} failures` : '');
+  out.appendChild(summary);
+}
+document.body.dataset.ready = '1';
+</script>
+</body></html>
