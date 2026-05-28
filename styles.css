@@ -876,6 +876,30 @@
   .mode-select-styled:hover { border-color: var(--border-strong); }
   .mode-select-styled:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+  /* Per-note progress dots for phrase aural-recall modes. */
+  .card-phrase-dots {
+    margin-top: 16px;
+    display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
+    min-height: 18px;
+  }
+  .phrase-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--border-strong);
+    transition: all 180ms ease;
+  }
+  .phrase-dot.captured {
+    background: var(--accent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+  }
+  .phrase-dot.wrong {
+    background: var(--danger);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 50%, transparent);
+  }
+  .phrase-dot.next {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .phrase-rhythm-chip {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 38px;

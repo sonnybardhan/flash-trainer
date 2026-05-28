@@ -180,9 +180,45 @@ function buildPhraseCard() {
   };
 }
 
+// ============================================================
+// Per-note progress dots (aural-recall modes).
+// ============================================================
+function renderPhraseDots(count) {
+  const dock = $('card-phrase-dots');
+  if (!dock) return;
+  dock.replaceChildren();
+  dock.style.display = count > 0 ? 'flex' : 'none';
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement('div');
+    d.className = 'phrase-dot' + (i === 0 ? ' next' : '');
+    d.dataset.idx = String(i);
+    dock.appendChild(d);
+  }
+}
+function markPhraseDot(idx, statusClass, total) {
+  const dock = $('card-phrase-dots');
+  if (!dock) return;
+  const dot = dock.querySelector(`.phrase-dot[data-idx="${idx}"]`);
+  if (!dot) return;
+  dot.classList.remove('next');
+  dot.classList.add(statusClass);
+  // Highlight the next pending dot.
+  if (typeof total === 'number' && idx + 1 < total) {
+    const next = dock.querySelector(`.phrase-dot[data-idx="${idx + 1}"]`);
+    if (next && !next.classList.contains('captured') && !next.classList.contains('wrong')) {
+      next.classList.add('next');
+    }
+  }
+}
+function hidePhraseDots() {
+  const dock = $('card-phrase-dots');
+  if (dock) { dock.replaceChildren(); dock.style.display = 'none'; }
+}
+
 function renderPhraseCard(card) {
   $('card-notation').replaceChildren();
   $('card-answer-chips').replaceChildren();
+  hidePhraseDots();
   const tag = $('card-mode-tag');
   const interactionLabel = {
     'aural-free':   'Aural recall · free',

@@ -113,6 +113,19 @@ function _openEchoWindow() {
   if (!_inTimeRun || _inTimeRun.cancelled) return;
   const r = _inTimeRun;
   r.windowOpenedAt = performance.now();
+  // Render / re-render the per-slot dots, preserving prior-iteration
+  // results so the user sees what's still pending.
+  if (typeof renderPhraseDots === 'function') {
+    renderPhraseDots(r.slots.length);
+    for (let i = 0; i < r.slots.length; i++) {
+      const id = r.slots[i].id;
+      if (r.captured.has(id) && typeof markPhraseDot === 'function') {
+        markPhraseDot(i, 'captured', r.slots.length);
+      } else if (r.wrong.has(id) && typeof markPhraseDot === 'function') {
+        markPhraseDot(i, 'wrong', r.slots.length);
+      }
+    }
+  }
   // Arm the MIDI matcher in pass-through mode so every press hits us.
   setMidiMatcher({
     mode: 'phrasePassThrough',
@@ -132,10 +145,12 @@ function _registerPress(midi) {
   // Find the nearest slot within tolerance.
   let nearest = null;
   let nearestDelta = Infinity;
-  for (const slot of r.slots) {
+  let nearestIdx = -1;
+  for (let i = 0; i < r.slots.length; i++) {
+    const slot = r.slots[i];
     const d = Math.abs(slot.onsetSec - pressSec);
     if (d <= (PHRASE_IN_TIME_TOLERANCE_MS / 1000) && d < nearestDelta) {
-      nearest = slot; nearestDelta = d;
+      nearest = slot; nearestDelta = d; nearestIdx = i;
     }
   }
   if (!nearest) return;  // ignore out-of-window presses
@@ -145,8 +160,10 @@ function _registerPress(midi) {
   if (correct) {
     r.captured.set(nearest.id, { midi, deltaSec: pressSec - nearest.onsetSec });
     r.wrong.delete(nearest.id);
+    if (typeof markPhraseDot === 'function') markPhraseDot(nearestIdx, 'captured', r.slots.length);
   } else {
     if (!r.captured.has(nearest.id)) r.wrong.add(nearest.id);
+    if (typeof markPhraseDot === 'function') markPhraseDot(nearestIdx, 'wrong', r.slots.length);
   }
   // Early-exit: if every slot is captured, close the window immediately.
   if (r.captured.size === r.slots.length) _closeEchoWindow(true);

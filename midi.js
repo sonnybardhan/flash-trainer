@@ -158,6 +158,31 @@ function evaluateMatch(latestNote) {
     return;
   }
 
+  // Karaoke-style sequence: advance an internal index on each correct
+  // next-note. Wrong notes flash red without resetting; in-pool notes
+  // that aren't the *next* expected are simply ignored (no penalty).
+  // Calls onProgress(index, total) after each advance so the UI can
+  // light the matching dot.
+  if (m.mode === 'phraseSequenceProgress') {
+    if (latestNote == null) return;
+    const expected = m.expected;
+    let idx = m.progress || 0;
+    if (idx >= expected.length) return;
+    const pc = ((latestNote % 12) + 12) % 12;
+    if (pc === expected[idx]) {
+      idx += 1;
+      m.progress = idx;
+      if (typeof m.onProgress === 'function') m.onProgress(idx, expected.length);
+      if (idx >= expected.length) {
+        fireCorrect();
+      }
+    } else if (!expected.includes(pc)) {
+      fireWrong();
+    }
+    // pc is in the expected set but out of position → ignore silently.
+    return;
+  }
+
   if (m.mode === 'set') {
     const held = midiState.heldNotes;
     const expected = m.expected; // array of MIDI numbers
@@ -375,9 +400,15 @@ function setupMidiForCard(card) {
         .filter(e => e.kind === 'note')
         .map(e => rootMidi + e.semitone + 12 * (e.octaveOffset || 0));
       const pcSeq = seqMidis.map(n => ((n % 12) + 12) % 12);
+      // Render dots row up front so the user sees what's coming.
+      if (typeof renderPhraseDots === 'function') renderPhraseDots(pcSeq.length);
       setMidiMatcher({
-        mode: 'pitchClassSequence', expected: pcSeq, container,
-        onCorrect: () => onMidiCardCorrect(card)
+        mode: 'phraseSequenceProgress', expected: pcSeq, container,
+        progress: 0,
+        onCorrect: () => onMidiCardCorrect(card),
+        onProgress: (idx, total) => {
+          if (typeof markPhraseDot === 'function') markPhraseDot(idx - 1, 'captured', total);
+        }
       });
       return;
     }
