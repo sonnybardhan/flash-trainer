@@ -489,9 +489,9 @@ function onMidiCardCorrect(card) {
     if (card.answered) return;
     card.answered = true;
     card.correct = true;
-    // Reveal the staff on a successful recall so the user can compare.
     if (typeof revealPhraseCard === 'function') revealPhraseCard(card);
   }
+  if (typeof updateNavButtons === 'function') updateNavButtons();
   // Brief beat so the user registers the green flash before the card flips.
   setTimeout(() => {
     if (state.session && state.session.lastCard === card) nextCard();

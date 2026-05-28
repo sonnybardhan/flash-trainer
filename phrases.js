@@ -299,6 +299,7 @@ function startInTimeForCard(card) {
     onComplete: (success, info) => {
       card.answered = true;
       card.correct = success;
+      if (typeof updateNavButtons === 'function') updateNavButtons();
       revealPhraseCard(card);
       if (!success) {
         if (typeof showToast === 'function') showToast(`Skipped — captured ${info.capturedCount}/${info.totalSlots} after ${info.iterations} loops`);
@@ -384,6 +385,7 @@ function _handlePhraseIdDegreeTap(card, pickedId) {
   } else {
     card.answered = true;
     card.correct = true;
+    if (typeof updateNavButtons === 'function') updateNavButtons();
     label.textContent = '✓';
     label.classList.add('correct');
     revealPhraseCard(card);

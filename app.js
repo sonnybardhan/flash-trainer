@@ -1539,6 +1539,18 @@ function shuffle(arr) {
 
 function nextCard() {
   const s = state.session;
+  // If the user navigated back and a "future" card already exists in
+  // history, step into that one instead of building a new one. Forward
+  // through history first, then build fresh once we're at the end.
+  if (s.historyIdx < s.history.length - 1) {
+    s.historyIdx++;
+    s.lastCard = s.history[s.historyIdx];
+    s.cardCount++;
+    s.beatsSinceCardChange = 0;
+    renderCard(s.lastCard);
+    updateNavButtons();
+    return;
+  }
   const drill = state.notation.drillType || 'chords';
   let card;
   if (drill === 'intervals') {
@@ -1570,13 +1582,59 @@ function nextCard() {
     card = s.queue.shift();
   }
   s.lastCard = card;
+  s.history.push(card);
+  s.historyIdx = s.history.length - 1;
   s.cardCount++;
   s.beatsSinceCardChange = 0;
   renderCard(card);
+  updateNavButtons();
   if (s.mode === 'count' && s.cardCount > s.target) {
     endSession();
     return;
   }
+}
+
+// Step back to the previously-shown card. Disabled at the front of
+// history; doesn't tear anything down — the card stays in history,
+// the user can step forward again.
+function previousCard() {
+  const s = state.session;
+  if (!s || s.historyIdx <= 0) return;
+  s.historyIdx--;
+  s.lastCard = s.history[s.historyIdx];
+  s.beatsSinceCardChange = 0;
+  renderCard(s.lastCard);
+  updateNavButtons();
+}
+
+// A card counts as "solved" for forward-button purposes when:
+//   - degree drill: card.answered is true
+//   - phrase drill in any answer-collecting mode: card.answered is true
+//   - chord / interval / phrase-non-quiz: tap-to-advance is the
+//     primary mechanism, so they're "solved" the moment they're
+//     viewed (the user has already seen the answer or the prompt)
+function cardIsSolved(card) {
+  if (!card) return false;
+  if (card.drill === 'degree' || card.drill === 'phrase') {
+    return !!card.answered;
+  }
+  return true;
+}
+
+function updateNavButtons() {
+  const backBtn = $('back-btn');
+  const fwdBtn = $('forward-btn');
+  if (!backBtn || !fwdBtn) return;
+  const s = state.session;
+  if (!s) {
+    backBtn.disabled = true; fwdBtn.disabled = true;
+    return;
+  }
+  backBtn.disabled = s.historyIdx <= 0;
+  // Forward is enabled either when we have a future to revisit, or
+  // when the current card is solved and a new card can be built.
+  const hasFuture = s.historyIdx < s.history.length - 1;
+  fwdBtn.disabled = !(hasFuture || cardIsSolved(s.lastCard));
 }
 
 function progressText() {
@@ -1996,7 +2054,12 @@ $('start-btn').addEventListener('click', () => {
     degreeAnchor,
     degreeIntroPlayed: false,
     phraseAnchor,
-    phraseChordIntroPlayed: false
+    phraseChordIntroPlayed: false,
+    // Session card history for back/forward navigation. history holds
+    // every card the user has seen; historyIdx is the position they're
+    // currently at. -1 = nothing rendered yet.
+    history: [],
+    historyIdx: -1
   };
 
   $('flashcard-view').classList.add('active');
@@ -2187,6 +2250,9 @@ $('quit-x').addEventListener('click', () => endSession(false));
 // Replay button: play the current card's chord on demand, even if the
 // Play sound toggle is off. Audio context is primed inside this click
 // gesture so resume() is allowed.
+$('back-btn').addEventListener('click', (e) => { e.stopPropagation(); previousCard(); });
+$('forward-btn').addEventListener('click', (e) => { e.stopPropagation(); if (!$('forward-btn').disabled) nextCard(); });
+
 $('phrase-ref-btn').addEventListener('click', async () => {
   if (!state.session || !state.session.phraseAnchor) return;
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -2238,6 +2304,8 @@ function endSession(save = true) {
   if (typeof stopInTimeRecall === 'function') stopInTimeRecall();
   if (typeof stopPhrase === 'function') stopPhrase();
   if (typeof hideOnScreenKeyboard === 'function') hideOnScreenKeyboard();
+  if ($('back-btn')) $('back-btn').disabled = true;
+  if ($('forward-btn')) $('forward-btn').disabled = true;
   if (!state.session) return;
 
   if (save) {

@@ -170,6 +170,7 @@ function handleDegreeAnswer(card, pickedId) {
   }
   card.answered = true;
   card.correct = true;
+  if (typeof updateNavButtons === 'function') updateNavButtons();
   const allChips = $('card-answer-chips').querySelectorAll('.answer-chip');
   allChips.forEach(c => {
     c.classList.add('disabled');

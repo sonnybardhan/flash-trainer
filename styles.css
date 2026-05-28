@@ -487,6 +487,23 @@
   }
   .replay-btn:hover { background: var(--surface); border-color: var(--border-strong); }
   .replay-btn:active { transform: scale(0.96); }
+  .nav-btn {
+    align-self: center; margin-left: 4px;
+    width: 32px; height: 32px;
+    padding: 0;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: var(--serif); font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.06s, opacity 0.15s;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--surface); border-color: var(--border-strong); }
+  .nav-btn:active:not(:disabled) { transform: scale(0.94); }
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
   /* #flashcard-view already has position: fixed, which scopes the absolute
      X button — do NOT override its position here. */
   .flash-stats {
