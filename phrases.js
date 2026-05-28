@@ -118,8 +118,29 @@ async function playPhraseCard(card) {
     startInTimeForCard(card);
     return;
   }
+  if (card.interaction === 'sing') {
+    runSingBackForCard(card);
+    return;
+  }
   const bpm = (state.metronome && state.metronome.bpm) || 80;
   await playPhrase(card.phrase, card.rootPitch, bpm);
+}
+
+// Sing-back: play the phrase, give the user bars*4 beats of silence to
+// sing it, then play the phrase again as the "answer." Self-evaluated —
+// the user taps the card to advance (handled by handlePhraseCardTap).
+async function runSingBackForCard(card) {
+  const bpm = (state.metronome && state.metronome.bpm) || 80;
+  const beatSec = 60 / Math.max(30, bpm);
+  await playPhrase(card.phrase, card.rootPitch, bpm);
+  // Pause for the user to sing back.
+  const silenceSec = card.bars * 4 * beatSec;
+  await new Promise(r => setTimeout(r, silenceSec * 1000));
+  // Bail out if the card changed (e.g. user skipped).
+  if (!state.session || state.session.lastCard !== card) return;
+  await playPhrase(card.phrase, card.rootPitch, bpm);
+  // After the answer-play, reveal the staff so the user can compare.
+  revealPhraseCard(card);
 }
 
 function startInTimeForCard(card) {
