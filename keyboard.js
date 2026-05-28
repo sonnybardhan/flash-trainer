@@ -10,7 +10,10 @@
 // Fixed velocity (110). No sustain pedal, no programmatic volume.
 // ============================================================
 
-const KEYBOARD_OCTAVES = 2;
+// Render a generous range so wider screens just see more keys;
+// narrow screens scroll horizontally instead of squeezing the
+// proportions. 4 octaves = 28 white keys = ~1008px at 36px/key.
+const KEYBOARD_OCTAVES = 4;
 
 // White-key MIDI offsets within one octave (relative to C).
 const _WHITE_OFFSETS = [0, 2, 4, 5, 7, 9, 11];
@@ -91,6 +94,17 @@ function showOnScreenKeyboardFor(card) {
   const r = card.rootPitch;
   const rootMidi = (r.octave + 1) * 12 + LETTER_SEMI[r.letter] + r.accidental;
   renderOnScreenKeyboard(dock, rootMidi);
+  // After paint, scroll the dock so the root sits roughly in the
+  // middle of the visible area — only matters when the keyboard is
+  // wider than the viewport.
+  requestAnimationFrame(() => {
+    const grid = dock.querySelector('.osk-grid');
+    if (!grid) return;
+    const rootKey = grid.querySelector(`.osk-key[data-midi="${rootMidi}"]`);
+    if (!rootKey) return;
+    const target = rootKey.offsetLeft - (dock.clientWidth / 2 - rootKey.offsetWidth / 2);
+    dock.scrollLeft = Math.max(0, target);
+  });
 }
 
 function hideOnScreenKeyboard() {
