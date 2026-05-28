@@ -60,6 +60,41 @@ function _restKeyForClef(clef) {
   return clef === 'bass' ? 'd/3' : 'b/4';
 }
 
+// Pick a single stem direction for a beam / tuplet group so all stems
+// point the same way and the beam clears every notehead. Standard
+// engraving rule: the note furthest from the middle staff line decides —
+// above middle → stems down, below middle → stems up. Mirrors the same
+// helper in notation.js, inlined here so phrase-render.js stays
+// self-contained.
+function _unifyStems(notes, clef) {
+  if (!notes || notes.length === 0) return;
+  const LETTER_SEMI_LOCAL = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+  const middleSemi = clef === 'bass' ? 38 : 59;  // D3 for bass, B4 for treble
+  let furthest = 0;
+  for (const n of notes) {
+    const key = (n.keys && n.keys[0]) || '';
+    const slash = key.indexOf('/');
+    if (slash < 0) continue;
+    const pitchPart = key.slice(0, slash);
+    const oct = parseInt(key.slice(slash + 1), 10);
+    const letter = pitchPart[0].toLowerCase();
+    let acc = 0;
+    for (let i = 1; i < pitchPart.length; i++) {
+      if (pitchPart[i] === '#') acc++;
+      else if (pitchPart[i] === 'b') acc--;
+    }
+    // Use the pitchSemitones convention (oct*12 + letter-semi + acc)
+    // so middleSemi values match notation.js exactly.
+    const semi = oct * 12 + (LETTER_SEMI_LOCAL[letter] || 0) + acc;
+    const diff = semi - middleSemi;
+    if (Math.abs(diff) > Math.abs(furthest)) furthest = diff;
+  }
+  const dir = furthest > 0 ? -1 : 1;  // above middle → stems down (-1)
+  for (const n of notes) {
+    if (typeof n.setStemDirection === 'function') n.setStemDirection(dir);
+  }
+}
+
 // Group events by bar and return [{ bar, events }].
 function _groupByBar(phrase) {
   const out = [];
@@ -129,18 +164,23 @@ function renderPhrase(phrase, rootPitch, container, opts = {}) {
       }
     }
 
-    // Wrap each triplet group.
+    // Wrap each triplet group. Unify stem direction across the group
+    // first so the tuplet bracket sits cleanly on one side of the noteheads.
     for (const bucket of tripletBuckets.values()) {
       const groupNotes = bucket.map(b => b.note);
-      // Quarter-triplet: notes_occupied: 2 (3 quarters in 2 beats).
-      // Eighth-triplet: notes_occupied: 2 in eighth units (3 eighths in 2-eighths = 1 beat).
-      // VexFlow's defaults handle both as long as we pass num_notes: 3.
-      const t = new VF.Tuplet(groupNotes, { num_notes: 3, notes_occupied: 2, ratioed: false, bracketed: true });
+      _unifyStems(groupNotes, clef);
+      // Eighth-triplet beams too — three eighths beamed under the bracket.
+      const isEighthTriplet = bucket[0] && bucket[0].ev.duration === 'tripletEighth';
+      const t = new VF.Tuplet(groupNotes, {
+        num_notes: 3, notes_occupied: 2,
+        ratioed: false, bracketed: !isEighthTriplet
+      });
       tuplets.push(t);
+      if (isEighthTriplet) beams.push(new VF.Beam(groupNotes));
     }
 
     // Beam adjacent eighth pairs within the same beat. Don't beam
-    // triplet eighths — those already get the tuplet bracket.
+    // triplet eighths — those already get the tuplet bracket / beam.
     const eighthRuns = [];
     let run = [];
     for (let i = 0; i < events.length; i++) {
@@ -155,14 +195,20 @@ function renderPhrase(phrase, rootPitch, container, opts = {}) {
     }
     if (run.length >= 2) eighthRuns.push(run);
     for (const r of eighthRuns) {
+      _unifyStems(r, clef);
       beams.push(new VF.Beam(r));
     }
 
-    // Format and draw the bar.
+    // Format and draw the bar. setStrict(false) because VexFlow's
+    // tick counter doesn't auto-adjust for tuplets pre-format —
+    // strict tick checking would reject any bar containing a triplet.
+    // The phrase generator already guarantees the bar sums to 4 beats.
     const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
-    voice.setStrict(false); // be forgiving while we shake out edge cases
+    voice.setStrict(false);
     voice.addTickables(notes);
-    new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 30);
+    // Leave breathing room for the trailing barline so the last
+    // notehead never overhangs into the next bar.
+    new VF.Formatter().joinVoices([voice]).format([voice], staveWidth - 50);
     voice.draw(ctx, stave);
   });
 
