@@ -253,7 +253,9 @@ function _phraseChordOpts(card) {
   // Consume the flag immediately so retry calls (e.g. sing-back's second
   // play) don't double-up the chord.
   state.session.phraseChordIntroPlayed = true;
-  return { tones, octaveOffset: -1, volume: 0.55 };
+  // preludeBars: chord plays SOLO for this many bars, then the melody
+  // starts. Mirrors the degree drill's chord-then-tone intro.
+  return { tones, octaveOffset: -1, volume: 0.6, preludeBars: 1 };
 }
 
 async function playPhraseCard(card) {

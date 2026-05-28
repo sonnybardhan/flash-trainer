@@ -102,21 +102,24 @@ function _scheduleIteration() {
 
   // 1) Play the demo immediately. The chord pad is a session-level
   // intro (matches degree drill behaviour): only the very first
-  // demo of the very first card gets it; subsequent demos and loop
-  // iterations are melody-only. Use the ♪ Ref button to re-hear.
+  // demo of the very first card gets it as a solo prelude bar; all
+  // subsequent demos and loop iterations are melody-only. Use the
+  // ♪ Ref button to re-hear the chord on demand.
   let chord = null;
+  let preludeSec = 0;
   if (state.session && !state.session.phraseChordIntroPlayed) {
     const anchor = state.session.phraseAnchor;
     const tones = anchor && anchor.context && anchor.context.chordTones;
     if (tones && tones.length) {
-      chord = { tones, octaveOffset: -1, volume: 0.55 };
+      chord = { tones, octaveOffset: -1, volume: 0.6, preludeBars: 1 };
+      preludeSec = 4 * (60 / Math.max(30, r.bpm));
       state.session.phraseChordIntroPlayed = true;
     }
   }
   playPhrase(r.card.phrase, r.card.rootPitch, r.bpm, { chord }).catch(() => {});
 
-  // 2) After demo + count-in, open the echo window.
-  const echoStartMs = (r.phraseDurationSec + r.countInSec) * 1000;
+  // 2) After demo (chord prelude + melody) + count-in, open the echo window.
+  const echoStartMs = (preludeSec + r.phraseDurationSec + r.countInSec) * 1000;
   const echoOpenTimer = setTimeout(_openEchoWindow, echoStartMs);
   r.timers.push(echoOpenTimer);
 }

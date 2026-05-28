@@ -44,32 +44,46 @@ async function playPhrase(phrase, rootPitch, bpm, opts = {}) {
   const target = _outputNode || audioCtx.destination;
   const rootMidi = _phrasePitchToMidi(rootPitch);
   const vol = opts.volume != null ? opts.volume : 0.85;
-  // Optional chord pad. opts.chord = {
+  // Optional chord. opts.chord = {
   //   tones: [0, 4, 7],          // semitones relative to rootPitch
   //   octaveOffset: -1,          // octaves below the melody root
-  //   volume: 0.5                // softer so the melody sits on top
+  //   volume: 0.5,               // softer so the melody sits on top
+  //   preludeBars: 1             // if set, chord plays SOLO for N bars
+  //                              //   BEFORE the melody starts, and stops
+  //                              //   when the melody begins. If null/0,
+  //                              //   chord plays sustained UNDER the
+  //                              //   whole phrase (the original mode,
+  //                              //   no longer used by the gated intro
+  //                              //   path but available for callers).
   // }
-  // Plays as a single sustained voicing under the entire phrase.
   let phraseBeats = 0;
   for (const ev of phrase.events) {
     phraseBeats = Math.max(phraseBeats, ev.onset + _phraseDurationBeats(ev.duration));
   }
   const phraseDurSec = phraseBeats * beatSec;
+  let preludeSec = 0;
   if (opts.chord && Array.isArray(opts.chord.tones) && opts.chord.tones.length > 0) {
     const chordOctOff = opts.chord.octaveOffset != null ? opts.chord.octaveOffset : -1;
     const chordVol = opts.chord.volume != null ? opts.chord.volume : 0.55;
+    const preludeBars = opts.chord.preludeBars || 0;
+    const chordDur = preludeBars > 0
+      ? preludeBars * 4 * beatSec        // solo prelude — stop when melody starts
+      : phraseDurSec + 0.2;              // legacy: pad under the whole phrase
     for (const semi of opts.chord.tones) {
       const midi = rootMidi + semi + 12 * chordOctOff;
       const env = _player.queueWaveTable(audioCtx, target, _activePresetData,
-                                          t0, midi, phraseDurSec + 0.2, chordVol);
+                                          t0, midi, chordDur, chordVol);
       if (env) _phraseEnvelopes.push(env);
     }
+    preludeSec = preludeBars > 0 ? preludeBars * 4 * beatSec : 0;
   }
 
-  let lastEnd = phraseDurSec;
+  // Melody starts after the chord prelude (if any). Without a prelude
+  // this is 0 and the melody starts at t0.
+  let lastEnd = preludeSec + phraseDurSec;
   for (const ev of phrase.events) {
     if (ev.kind === 'rest') continue;
-    const startSec = ev.onset * beatSec;
+    const startSec = preludeSec + ev.onset * beatSec;
     const durSec = _phraseDurationBeats(ev.duration) * beatSec * 0.95;
     const midi = rootMidi + ev.semitone + 12 * (ev.octaveOffset || 0);
     const env = _player.queueWaveTable(audioCtx, target, _activePresetData,
