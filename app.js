@@ -73,7 +73,9 @@ const state = {
     playSound: false,            // piano audio on each card (lazy loads engine)
     pianoPreset: 'fluidr3',      // see PIANO_PRESETS in sound.js
     eq: { preset: 'warm', bassDb: 3, midDb: 0, trebleDb: -4, reverb: 10 },  // see EQ_PRESETS in sound.js
-    midiThru: true               // route MIDI input through the piano engine
+    midiThru: true,              // route MIDI input through the piano engine
+    midiIgnoreOctaves: false,    // accept any octave as long as voicing order matches
+    degreeRangeMode: 'auto'      // 'auto' (P4 below root → octave + M3 above) | 'custom' (use rangeLow/High)
   }
 };
 
@@ -491,6 +493,7 @@ $('root-presets').addEventListener('click', (e) => {
 $('mode-select').addEventListener('change', (e) => {
   $('count-stepper').style.display = e.target.value === 'count' ? 'flex' : 'none';
   $('time-stepper').style.display = e.target.value === 'time' ? 'flex' : 'none';
+  if ($('live-mode-select')) $('live-mode-select').value = e.target.value;
 });
 $('advance-select').addEventListener('change', () => {
   const val = $('advance-select').value;
@@ -534,6 +537,8 @@ function onMidiConnectivityChange(connectedCount, prevCount) {
   const opt = $('advance-option-midi');
   if (!select || !opt) return;
   opt.hidden = connectedCount === 0;
+  const liveOpt = $('live-advance-option-midi');
+  if (liveOpt) liveOpt.hidden = connectedCount === 0;
   // First connect (transitioning from 0→N): if user is sitting on Tap card,
   // upgrade to MIDI advance.
   if (connectedCount > 0 && prevCount === 0 && select.value === 'manual') {
@@ -548,6 +553,7 @@ function onMidiConnectivityChange(connectedCount, prevCount) {
     select.value = 'manual';
     updateAdvanceUI();
     updateCollapseMeta();
+    if (typeof updateLiveAdvanceUI === 'function') updateLiveAdvanceUI();
     showToast('MIDI device disconnected — switched to Tap card');
   } else if (connectedCount === 0 && !state.session && select.value === 'midi') {
     // Not in a session: bounce the dropdown off the now-hidden option.
@@ -752,6 +758,7 @@ function applyNotationSettingsToUI() {
   $('unconventional-switch').classList.toggle('on', ns.unconventionalSpellings);
   $('play-sound-switch').classList.toggle('on', ns.playSound);
   $('midi-thru-switch').classList.toggle('on', ns.midiThru !== false);
+  $('midi-ignore-octaves-switch').classList.toggle('on', !!ns.midiIgnoreOctaves);
   populatePianoPresetSelect();
   $('piano-preset-select').value = ns.pianoPreset || 'fluidr3';
   if (!ns.eq) ns.eq = { preset: 'warm', bassDb: 3 };
@@ -912,6 +919,8 @@ function applyDegreeConfigToUI() {
                     state.notation.degreeChordQuality || 'major');
   $('degree-scale-select').value = state.notation.degreeScaleMode || 'ionian';
   renderDegreeScaleChips();
+  setActiveSegment('degree-range-mode-segment', 'degreeRangeMode',
+                    state.notation.degreeRangeMode || 'auto');
 }
 
 function populatePianoPresetSelect() {
@@ -1019,6 +1028,41 @@ $('degree-quality-segment').addEventListener('click', (e) => {
                     state.notation.degreeChordQuality);
   saveNotationSettings();
 });
+$('degree-range-mode-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  setDegreeRangeMode(seg.dataset.degreeRangeMode);
+});
+
+function setDegreeRangeMode(mode) {
+  if (mode !== 'auto' && mode !== 'custom') return;
+  state.notation.degreeRangeMode = mode;
+  setActiveSegment('degree-range-mode-segment', 'degreeRangeMode', mode);
+  if ($('live-degree-range-segment')) {
+    setActiveSegment('live-degree-range-segment', 'degreeRangeMode', mode);
+  }
+  if ($('degree-range-display')) {
+    $('degree-range-display').textContent = mode === 'auto' ? 'Auto' : 'Custom';
+  }
+  saveNotationSettings();
+  // Live re-anchor: if we're mid-degree-session, rebuild the anchor with the
+  // new range and replay the chord intro so the user re-orients.
+  if (state.session && state.session.degreeAnchor) {
+    const anchor = buildDegreeSessionAnchor();
+    if (anchor) {
+      state.session.degreeAnchor = anchor;
+      state.session.degreeIntroPlayed = false;
+      // If the current card is a degree card, rebuild it from the new anchor.
+      if (state.session.lastCard && state.session.lastCard.drill === 'degree') {
+        const card = buildDegreeCard();
+        if (card) {
+          state.session.lastCard = card;
+          renderCard(card);
+        }
+      }
+    }
+  }
+}
 $('degree-scale-select').addEventListener('change', (e) => {
   const id = e.target.value;
   const preset = SCALE_PRESETS[id];
@@ -1128,6 +1172,15 @@ $('midi-thru-switch').addEventListener('click', () => {
   $('midi-thru-switch').classList.toggle('on', state.notation.midiThru);
   if (state.notation.midiThru) prefetchPianoEngine();
   saveNotationSettings();
+});
+$('midi-ignore-octaves-switch').addEventListener('click', () => {
+  state.notation.midiIgnoreOctaves = !state.notation.midiIgnoreOctaves;
+  $('midi-ignore-octaves-switch').classList.toggle('on', state.notation.midiIgnoreOctaves);
+  saveNotationSettings();
+  // Re-arm the current card's matcher with the new strictness.
+  if (state.session && state.session.lastCard && typeof setupMidiForCard === 'function') {
+    setupMidiForCard(state.session.lastCard);
+  }
 });
 $('piano-preset-select').addEventListener('change', (e) => setPianoPreset(e.target.value));
 $('eq-piano-select').addEventListener('change', (e) => setPianoPreset(e.target.value));
@@ -1421,9 +1474,10 @@ function nextCard() {
 }
 
 function progressText() {
-  return state.session.mode === 'count'
-    ? `${state.session.cardCount} / ${state.session.target}`
-    : `${state.session.cardCount}`;
+  const s = state.session;
+  if (s.mode === 'count') return `${s.cardCount} / ${s.target}`;
+  if (s.mode === 'infinite') return `${s.cardCount} ∞`;
+  return `${s.cardCount}`;
 }
 
 function renderCard(card) {
@@ -1604,6 +1658,87 @@ document.addEventListener('click', (e) => {
   if (!$('metro-indicator').contains(e.target)) {
     $('metro-panel').classList.remove('open');
   }
+  if (!$('advance-indicator').contains(e.target)) {
+    $('advance-panel').classList.remove('open');
+  }
+  if ($('degree-range-indicator') && !$('degree-range-indicator').contains(e.target)) {
+    $('degree-range-panel').classList.remove('open');
+  }
+  if ($('session-indicator') && !$('session-indicator').contains(e.target)) {
+    $('session-panel').classList.remove('open');
+  }
+});
+
+$('advance-display-tap').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('advance-panel').classList.toggle('open');
+});
+
+$('degree-range-display-tap').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('degree-range-panel').classList.toggle('open');
+});
+$('session-display-tap').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('session-panel').classList.toggle('open');
+});
+
+function updateLiveSessionUI() {
+  if (!state.session) return;
+  const s = state.session;
+  $('live-mode-select').value = s.mode;
+  $('live-count-row').style.display = s.mode === 'count' ? 'flex' : 'none';
+  $('live-time-row').style.display  = s.mode === 'time'  ? 'flex' : 'none';
+  let label;
+  if (s.mode === 'count') label = `${s.target} reps`;
+  else if (s.mode === 'time') label = `${Math.round(s.target / 60)} min`;
+  else label = '∞ infinite';
+  $('session-display').textContent = label;
+  $('stat-progress').textContent = progressText();
+}
+
+$('live-mode-select').addEventListener('change', (e) => {
+  e.stopPropagation();
+  if (!state.session) return;
+  const newMode = e.target.value;
+  state.session.mode = newMode;
+  // Sync the home select so the choice persists past this session.
+  $('mode-select').value = newMode;
+  $('count-stepper').style.display = newMode === 'count' ? 'flex' : 'none';
+  $('time-stepper').style.display  = newMode === 'time'  ? 'flex' : 'none';
+  if (newMode === 'count') {
+    state.session.target = state.steppers.count;
+  } else if (newMode === 'time') {
+    state.session.target = state.steppers.time * 60;
+  } else {
+    state.session.target = Infinity;
+  }
+  updateLiveSessionUI();
+});
+$('live-degree-range-segment').addEventListener('click', (e) => {
+  const seg = e.target.closest('.segment');
+  if (!seg) return;
+  e.stopPropagation();
+  setDegreeRangeMode(seg.dataset.degreeRangeMode);
+});
+
+$('live-advance-select').addEventListener('change', (e) => {
+  e.stopPropagation();
+  if (!state.session) return;
+  const val = e.target.value;
+  // Beats/bars need the metronome — auto-enable if it's off, same as home.
+  if ((val === 'beats' || val === 'bars') && !state.metronome.enabled) {
+    state.metronome.enabled = true;
+    $('metro-switch').classList.add('on');
+    $('live-accent-switch').classList.toggle('on', state.metronome.accent);
+    startMetronome();
+  }
+  state.session.advance = val;
+  // Mirror to home select so the user's preference persists after the session.
+  $('advance-select').value = val;
+  updateAdvanceUI();
+  updateCollapseMeta();
+  applyLiveAdvanceChange();
 });
 
 // ============================================================
@@ -1665,7 +1800,9 @@ $('start-btn').addEventListener('click', () => {
 
   const mode = $('mode-select').value;
   const advance = $('advance-select').value;
-  const target = mode === 'count' ? state.steppers.count : state.steppers.time * 60;
+  const target = mode === 'count' ? state.steppers.count
+                : mode === 'time'  ? state.steppers.time * 60
+                                   : Infinity;
 
   if ((advance === 'beats' || advance === 'bars') && !state.metronome.enabled) {
     showModal({
@@ -1730,6 +1867,15 @@ $('start-btn').addEventListener('click', () => {
   $('flashcard-view').classList.add('active');
   document.body.classList.add('session-active');
   document.body.style.overflow = 'hidden';
+  // Hide the advance chip for degree drill — that drill always uses manual.
+  $('advance-indicator').style.display = drill === 'degrees' ? 'none' : '';
+  // Show the degree-range chip only for the degree drill.
+  $('degree-range-indicator').style.display = drill === 'degrees' ? '' : 'none';
+  const rangeMode = state.notation.degreeRangeMode || 'auto';
+  $('degree-range-display').textContent = rangeMode === 'auto' ? 'Auto' : 'Custom';
+  setActiveSegment('live-degree-range-segment', 'degreeRangeMode', rangeMode);
+  updateLiveAdvanceUI();
+  updateLiveSessionUI();
   nextCard();
   startTimer();
   if (effectiveAdvance === 'seconds') startAutoAdvance();
@@ -1755,6 +1901,44 @@ function startAutoAdvance() {
   advanceInterval = setInterval(() => {
     if (state.session && !state.session.pauseStartedAt) nextCard();
   }, state.session.secondsPerCard * 1000);
+}
+
+function stopAutoAdvance() {
+  clearInterval(advanceInterval);
+  advanceInterval = null;
+}
+
+// Apply an in-session change to the advance mode or any of its per-mode
+// values. Restarts the seconds-based interval where needed; beats/bars are
+// driven by the metronome tick which reads the values live.
+function applyLiveAdvanceChange() {
+  if (!state.session) return;
+  const a = state.session.advance;
+  if (a === 'seconds') startAutoAdvance();
+  else stopAutoAdvance();
+  // Reset the beat counter so a switch into beats/bars doesn't fire
+  // immediately based on the prior count.
+  state.session.beatsSinceCardChange = 0;
+  updateLiveAdvanceUI();
+}
+
+function updateLiveAdvanceUI() {
+  if (!state.session) return;
+  const a = state.session.advance;
+  $('live-advance-select').value = a;
+  $('live-seconds-row').style.display = a === 'seconds' ? 'flex' : 'none';
+  $('live-beats-row').style.display   = a === 'beats'   ? 'flex' : 'none';
+  $('live-bars-row').style.display    = a === 'bars'    ? 'flex' : 'none';
+  const labels = {
+    manual: 'Tap',
+    midi:   '⌨ On play',
+    seconds: `${state.session.secondsPerCard}s`,
+    beats:   `${state.session.beatsPerCard} beats`,
+    bars:    `${state.session.barsPerCard} bars`
+  };
+  $('advance-display').textContent = labels[a] || 'Tap';
+  // Mirror MIDI-option visibility from the home select onto the live one.
+  $('live-advance-option-midi').hidden = $('advance-option-midi').hidden;
 }
 
 $('flash-card').addEventListener('click', (e) => {
@@ -1977,11 +2161,92 @@ applyTheme(state.theme);
 
 // Build steppers
 const stepperRefs = {};
-stepperRefs.count = buildStepper('count-stepper', state.steppers.count, (v) => { state.steppers.count = v; });
-stepperRefs.time = buildStepper('time-stepper', state.steppers.time, (v) => { state.steppers.time = v; });
-stepperRefs.seconds = buildStepper('seconds-stepper', state.steppers.seconds, (v) => { state.steppers.seconds = v; updateCollapseMeta(); });
-stepperRefs.beats = buildStepper('beats-stepper', state.steppers.beats, (v) => { state.steppers.beats = v; updateCollapseMeta(); });
-stepperRefs.bars = buildStepper('bars-stepper', state.steppers.bars, (v) => { state.steppers.bars = v; updateCollapseMeta(); });
+stepperRefs.count = buildStepper('count-stepper', state.steppers.count, (v) => {
+  state.steppers.count = v;
+  if (stepperRefs.liveCount) stepperRefs.liveCount.setValue(v);
+  if (state.session && state.session.mode === 'count') {
+    state.session.target = v;
+    updateLiveSessionUI();
+  }
+});
+stepperRefs.time = buildStepper('time-stepper', state.steppers.time, (v) => {
+  state.steppers.time = v;
+  if (stepperRefs.liveTime) stepperRefs.liveTime.setValue(v);
+  if (state.session && state.session.mode === 'time') {
+    state.session.target = v * 60;
+    updateLiveSessionUI();
+  }
+});
+stepperRefs.liveCount = buildStepper('live-count-stepper', state.steppers.count, (v) => {
+  state.steppers.count = v;
+  stepperRefs.count.setValue(v);
+  if (state.session && state.session.mode === 'count') {
+    state.session.target = v;
+    updateLiveSessionUI();
+  }
+});
+stepperRefs.liveTime = buildStepper('live-time-stepper', state.steppers.time, (v) => {
+  state.steppers.time = v;
+  stepperRefs.time.setValue(v);
+  if (state.session && state.session.mode === 'time') {
+    state.session.target = v * 60;
+    updateLiveSessionUI();
+  }
+});
+stepperRefs.seconds = buildStepper('seconds-stepper', state.steppers.seconds, (v) => {
+  state.steppers.seconds = v;
+  if (stepperRefs.liveSeconds) stepperRefs.liveSeconds.setValue(v);
+  if (state.session && state.session.advance === 'seconds') {
+    state.session.secondsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
+stepperRefs.beats = buildStepper('beats-stepper', state.steppers.beats, (v) => {
+  state.steppers.beats = v;
+  if (stepperRefs.liveBeats) stepperRefs.liveBeats.setValue(v);
+  if (state.session && state.session.advance === 'beats') {
+    state.session.beatsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
+stepperRefs.bars = buildStepper('bars-stepper', state.steppers.bars, (v) => {
+  state.steppers.bars = v;
+  if (stepperRefs.liveBars) stepperRefs.liveBars.setValue(v);
+  if (state.session && state.session.advance === 'bars') {
+    state.session.barsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
+stepperRefs.liveSeconds = buildStepper('live-seconds-stepper', state.steppers.seconds, (v) => {
+  state.steppers.seconds = v;
+  stepperRefs.seconds.setValue(v);
+  if (state.session && state.session.advance === 'seconds') {
+    state.session.secondsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
+stepperRefs.liveBeats = buildStepper('live-beats-stepper', state.steppers.beats, (v) => {
+  state.steppers.beats = v;
+  stepperRefs.beats.setValue(v);
+  if (state.session && state.session.advance === 'beats') {
+    state.session.beatsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
+stepperRefs.liveBars = buildStepper('live-bars-stepper', state.steppers.bars, (v) => {
+  state.steppers.bars = v;
+  stepperRefs.bars.setValue(v);
+  if (state.session && state.session.advance === 'bars') {
+    state.session.barsPerCard = v;
+    applyLiveAdvanceChange();
+  }
+  updateCollapseMeta();
+});
 stepperRefs.bpm = buildStepper('bpm-stepper', state.metronome.bpm, (v) => {
   state.metronome.bpm = v;
   if (state.session && metroState.schedulerId) updateMetroDisplay();
@@ -2025,3 +2290,24 @@ renderAll();
 
 // MIDI input — fire-and-forget so a denied permission doesn't block the app.
 initMidi();
+
+// Prime the AudioContext on the FIRST user gesture of any kind (click, key,
+// touch). Browsers don't reliably count MIDI input as a user activation, so
+// without this the very first MIDI note arrives before the AudioContext is
+// allowed to start. Once primed, every subsequent note plays instantly.
+(function primeAudioOnFirstGesture() {
+  const events = ['pointerdown', 'keydown', 'touchstart'];
+  const prime = () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    }
+    if (audioCtx.state !== 'running') {
+      audioCtx.resume().catch(() => {});
+    }
+    if (state.notation.midiThru !== false && typeof prefetchPianoEngine === 'function') {
+      prefetchPianoEngine();
+    }
+    events.forEach(ev => document.removeEventListener(ev, prime, true));
+  };
+  events.forEach(ev => document.addEventListener(ev, prime, { capture: true, once: false }));
+})();

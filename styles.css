@@ -543,6 +543,41 @@
   .metro-panel .switch::after { width: 14px; height: 14px; }
   .metro-panel .switch.on::after { left: 18px; }
 
+  .advance-indicator,
+  .degree-range-indicator,
+  .session-indicator {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    cursor: pointer; margin-right: 14px;
+  }
+  .advance-display {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    letter-spacing: 1px;
+    padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .advance-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; display: none;
+    margin-top: 4px;
+    min-width: 220px;
+  }
+  .advance-panel.open { display: block; }
+  .advance-panel-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0; gap: 10px;
+  }
+  .advance-panel-row label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--text-faint);
+  }
+  .advance-panel select {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border-strong); border-radius: 6px;
+    padding: 4px 8px; font-family: var(--mono); font-size: 11px;
+  }
+
   .flash-card {
     flex: 1; display: flex; flex-direction: column;
     align-items: center; justify-content: center;

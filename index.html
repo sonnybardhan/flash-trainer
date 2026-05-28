@@ -100,7 +100,14 @@
         <label>Degrees</label>
         <div class="degree-scale-chips-wrap"><div id="degree-scale-chips" class="degree-scale-chips"></div></div>
       </div>
-      <div class="mode-hint">The chord plays once at the start of each session. Tap a degree to add or remove it; the scale switches to “Custom” when you deviate from a preset.</div>
+      <div class="form-row" id="degree-range-mode-row">
+        <label>Range</label>
+        <div class="segment-control" id="degree-range-mode-segment">
+          <div class="segment" data-degree-range-mode="auto">Auto</div>
+          <div class="segment" data-degree-range-mode="custom">Custom</div>
+        </div>
+      </div>
+      <div class="mode-hint">The chord plays once at the start of each session. Tap a degree to add or remove it; the scale switches to “Custom” when you deviate from a preset. <strong>Auto</strong> range fits a P4 below the root through an octave + M3 above; <strong>Custom</strong> uses the global range setting.</div>
     </div>
   </div>
 
@@ -112,6 +119,7 @@
         <select id="mode-select" style="padding: 8px 28px 8px 12px; border-radius: 6px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); font-family: var(--sans); font-size: 14px; appearance: none; -webkit-appearance: none; cursor: pointer;">
           <option value="count">Reps</option>
           <option value="time">Minutes</option>
+          <option value="infinite">Infinite</option>
         </select>
         <div class="mode-target-controls">
           <div class="stepper" id="count-stepper" data-min="1" data-max="999" data-step="5" style="display:flex;"></div>
@@ -216,6 +224,10 @@
       <div class="form-row" id="midi-thru-row">
         <label>MIDI thru</label>
         <div class="switch" id="midi-thru-switch"></div>
+      </div>
+      <div class="form-row" id="midi-ignore-octaves-row">
+        <label>Ignore octaves (MIDI)</label>
+        <div class="switch" id="midi-ignore-octaves-switch"></div>
       </div>
       <div class="form-row" id="piano-preset-row" style="display:none;">
         <label>Piano</label>
@@ -369,6 +381,73 @@
         <div class="stat-value" id="stat-time">00:00</div>
       </div>
       <button class="replay-btn" id="replay-btn" aria-label="Replay chord">▶ Replay</button>
+    </div>
+    <div class="session-indicator" id="session-indicator">
+      <div class="advance-display" id="session-display-tap">
+        <span id="session-display">10 reps</span>
+      </div>
+      <div class="advance-panel" id="session-panel">
+        <div class="advance-panel-row">
+          <label>Mode</label>
+          <select id="live-mode-select">
+            <option value="count">Reps</option>
+            <option value="time">Minutes</option>
+            <option value="infinite">Infinite</option>
+          </select>
+        </div>
+        <div class="advance-panel-row" id="live-count-row">
+          <label>Reps</label>
+          <div class="stepper" id="live-count-stepper" data-min="1" data-max="999" data-step="5"></div>
+        </div>
+        <div class="advance-panel-row" id="live-time-row" style="display:none;">
+          <label>Minutes</label>
+          <div class="stepper" id="live-time-stepper" data-min="1" data-max="120" data-step="1"></div>
+        </div>
+      </div>
+    </div>
+    <div class="degree-range-indicator" id="degree-range-indicator" style="display:none;">
+      <div class="advance-display" id="degree-range-display-tap">
+        <span>Range:&nbsp;</span><span id="degree-range-display">Auto</span>
+      </div>
+      <div class="advance-panel" id="degree-range-panel">
+        <div class="advance-panel-row">
+          <label>Range mode</label>
+          <div class="segment-control" id="live-degree-range-segment">
+            <div class="segment" data-degree-range-mode="auto">Auto</div>
+            <div class="segment" data-degree-range-mode="custom">Custom</div>
+          </div>
+        </div>
+        <div class="mode-hint" style="margin-top:6px;">Auto fits P4 below the root through octave + M3 above. Custom uses your global range.</div>
+      </div>
+    </div>
+    <div class="advance-indicator" id="advance-indicator">
+      <div class="advance-display" id="advance-display-tap">
+        <span id="advance-display">Tap</span>
+      </div>
+      <div class="advance-panel" id="advance-panel">
+        <div class="advance-panel-row">
+          <label>Mode</label>
+          <select id="live-advance-select">
+            <option value="manual">Tap card</option>
+            <option value="midi" id="live-advance-option-midi" hidden>On correct play (MIDI)</option>
+            <option value="seconds">Every N seconds</option>
+            <option value="beats">Every N beats</option>
+            <option value="bars">Every N bars</option>
+          </select>
+        </div>
+        <div class="advance-panel-row" id="live-seconds-row" style="display:none;">
+          <label>Seconds / card</label>
+          <div class="stepper" id="live-seconds-stepper" data-min="1" data-max="60" data-step="1"></div>
+        </div>
+        <div class="advance-panel-row" id="live-beats-row" style="display:none;">
+          <label>Beats / card</label>
+          <div class="stepper" id="live-beats-stepper" data-min="1" data-max="64" data-step="1"></div>
+        </div>
+        <div class="advance-panel-row" id="live-bars-row" style="display:none;">
+          <label>Bars / card</label>
+          <div class="stepper" id="live-bars-stepper" data-min="1" data-max="32" data-step="1"></div>
+        </div>
+      </div>
     </div>
     <div class="metronome-indicator" id="metro-indicator" style="display:none;">
       <div class="metronome-display" id="metro-display-tap">

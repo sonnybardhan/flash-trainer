@@ -187,6 +187,54 @@ function evaluateMatch(latestNote) {
     return;
   }
 
+  // Voicing-ordered, octave-insensitive matching for block chords/intervals.
+  // expected: array of pitch classes in low-to-high voicing order.
+  // Held notes are sorted by MIDI low-to-high; their *unique* pcs in that
+  // order must equal expected. Doublings (e.g. an extra octave of the root)
+  // are tolerated. Doesn't fire until the right number of distinct pcs are
+  // held in the correct order.
+  if (m.mode === 'pitchClassOrdered') {
+    const held = midiState.heldNotes;
+    if (held.size > 0) {
+      const heldArr = Array.from(held).sort((a, b) => a - b);
+      const uniqueOrderedPcs = [];
+      for (const n of heldArr) {
+        const pc = ((n % 12) + 12) % 12;
+        if (!uniqueOrderedPcs.includes(pc)) uniqueOrderedPcs.push(pc);
+      }
+      if (uniqueOrderedPcs.length === m.expected.length &&
+          uniqueOrderedPcs.every((pc, i) => pc === m.expected[i])) {
+        fireCorrect();
+        return;
+      }
+    }
+    if (latestNote != null) {
+      const pc = ((latestNote % 12) + 12) % 12;
+      if (!m.expected.includes(pc)) fireWrong();
+    }
+    return;
+  }
+
+  // Ordered note-on sequence, octave-insensitive.
+  // expected: array of pitch classes in playback order.
+  if (m.mode === 'pitchClassSequence') {
+    const expected = m.expected;
+    const seq = midiState.sequence;
+    if (seq.length >= expected.length) {
+      const tailPcs = seq.slice(seq.length - expected.length)
+                         .map(n => ((n % 12) + 12) % 12);
+      if (tailPcs.every((pc, i) => pc === expected[i])) {
+        fireCorrect();
+        return;
+      }
+    }
+    if (latestNote != null) {
+      const pc = ((latestNote % 12) + 12) % 12;
+      if (!expected.includes(pc)) fireWrong();
+    }
+    return;
+  }
+
   // Octave-insensitive chord matching with bass-note constraint.
   // expected: array of pitch classes (3 for a triad). bassPc: required pc of
   // the lowest held note. Allows note doublings (e.g. doubled root).
@@ -255,20 +303,37 @@ function setupMidiForCard(card) {
 
   if (card.drill === 'interval') {
     const articulation = card.renderedArticulation || resolveArticulation(ns.articulation);
+    const ignoreOct = !!ns.midiIgnoreOctaves;
     const lo = pitchToMidi(card.lowPitch);
     const hi = pitchToMidi(card.highPitch);
     if (articulation === 'block') {
-      setMidiMatcher({
-        mode: 'set', expected: [lo, hi], container,
-        onCorrect: () => onMidiCardCorrect(card)
-      });
+      if (ignoreOct) {
+        const pcs = [lo, hi].map(n => ((n % 12) + 12) % 12);
+        setMidiMatcher({
+          mode: 'pitchClassOrdered', expected: pcs, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      } else {
+        setMidiMatcher({
+          mode: 'set', expected: [lo, hi], container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      }
     } else {
       const direction = card.direction || 'up';
       const seq = direction === 'down' ? [hi, lo] : [lo, hi];
-      setMidiMatcher({
-        mode: 'sequence', expected: seq, container,
-        onCorrect: () => onMidiCardCorrect(card)
-      });
+      if (ignoreOct) {
+        const pcSeq = seq.map(n => ((n % 12) + 12) % 12);
+        setMidiMatcher({
+          mode: 'pitchClassSequence', expected: pcSeq, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      } else {
+        setMidiMatcher({
+          mode: 'sequence', expected: seq, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      }
     }
     return;
   }
@@ -288,20 +353,41 @@ function setupMidiForCard(card) {
   if (ns.format === 'notation') {
     if (!card.expectedPitches || !card.expectedPitches.length) return;
     const articulation = card.renderedArticulation || resolveArticulation(ns.articulation);
+    const ignoreOct = !!ns.midiIgnoreOctaves;
     const midi = card.expectedPitches.map(pitchToMidi);
     if (articulation === 'block') {
-      setMidiMatcher({
-        mode: 'set', expected: midi, container,
-        onCorrect: () => onMidiCardCorrect(card)
-      });
+      if (ignoreOct) {
+        // Voicing order = low-to-high pitch classes (dedup doublings).
+        const sortedPcs = [...midi].sort((a, b) => a - b)
+                                    .map(n => ((n % 12) + 12) % 12);
+        const orderedUnique = [];
+        for (const pc of sortedPcs) if (!orderedUnique.includes(pc)) orderedUnique.push(pc);
+        setMidiMatcher({
+          mode: 'pitchClassOrdered', expected: orderedUnique, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      } else {
+        setMidiMatcher({
+          mode: 'set', expected: midi, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      }
     } else {
       const direction = card.renderedDirection || resolveDirection(ns.arpeggioDirection);
       const sorted = [...midi].sort((a, b) => a - b);
       const seq = direction === 'down' ? sorted.reverse() : sorted;
-      setMidiMatcher({
-        mode: 'sequence', expected: seq, container,
-        onCorrect: () => onMidiCardCorrect(card)
-      });
+      if (ignoreOct) {
+        const pcSeq = seq.map(n => ((n % 12) + 12) % 12);
+        setMidiMatcher({
+          mode: 'pitchClassSequence', expected: pcSeq, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      } else {
+        setMidiMatcher({
+          mode: 'sequence', expected: seq, container,
+          onCorrect: () => onMidiCardCorrect(card)
+        });
+      }
     }
     return;
   }

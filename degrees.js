@@ -49,6 +49,23 @@ function computeDegreeTone(rootPitch, degreeId) {
   return { letter, accidental: targetSemi - natural, octave };
 }
 
+// Compute the auto range for a degree-drill key: P4 below the root through
+// (octave + M3) above the root. Returns pitch-name strings ready for
+// placeChordInRange.
+const _SHARP_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function _semiToPitchName(semi) {
+  const oct = Math.floor(semi / 12);
+  return _SHARP_NAMES[((semi % 12) + 12) % 12] + oct;
+}
+function autoRangeForDegreeKey(key, baseOctave = 4) {
+  const root = parseSpelling(key);
+  const rootSemi = baseOctave * 12 + LETTER_SEMI[root.letter] + root.accidental;
+  return {
+    low:  _semiToPitchName(rootSemi - 5),       // P4 below root
+    high: _semiToPitchName(rootSemi + 12 + 4)   // octave + M3 above root
+  };
+}
+
 // Build the session's anchor chord. Called once per session, when the user
 // hits Begin and the drill is 'degrees'.
 function buildDegreeSessionAnchor() {
@@ -64,7 +81,14 @@ function buildDegreeSessionAnchor() {
     const sel = $('degree-key-select');
     if (sel) sel.value = key;
   }
-  const triad = placeChordInRange(key, quality, 'root', ns.rangeLow, ns.rangeHigh)
+  let rangeLow, rangeHigh;
+  if (ns.degreeRangeMode === 'custom') {
+    rangeLow = ns.rangeLow; rangeHigh = ns.rangeHigh;
+  } else {
+    const r = autoRangeForDegreeKey(key);
+    rangeLow = r.low; rangeHigh = r.high;
+  }
+  const triad = placeChordInRange(key, quality, 'root', rangeLow, rangeHigh)
                  || placeChordInRange(key, quality, 'root', 'C3', 'C6');
   if (!triad) return null;
   const triadPitches = substituteAll(triad, { spelling: key, quality });
