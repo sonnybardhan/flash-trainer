@@ -150,6 +150,14 @@ function evaluateMatch(latestNote) {
   const m = midiState.matcher;
   if (!m) return;
 
+  // Pass-through mode: dispatches every note-on to the caller's
+  // handler. Used by phrase-match.js to drive the in-time slot
+  // tracker with full press timing control.
+  if (m.mode === 'phrasePassThrough') {
+    if (latestNote != null && typeof m.onPress === 'function') m.onPress(latestNote);
+    return;
+  }
+
   if (m.mode === 'set') {
     const held = midiState.heldNotes;
     const expected = m.expected; // array of MIDI numbers

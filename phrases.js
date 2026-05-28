@@ -112,13 +112,44 @@ function revealPhraseCard(card) {
 }
 
 async function playPhraseCard(card) {
+  // In-time aural recall has its own scheduler — it handles the demo
+  // playback as part of the loop, so we skip the standalone play here.
+  if (card.interaction === 'aural-intime') {
+    startInTimeForCard(card);
+    return;
+  }
   const bpm = (state.metronome && state.metronome.bpm) || 80;
-  // Always replays cleanly — the playback module cancels any prior tail.
   await playPhrase(card.phrase, card.rootPitch, bpm);
+}
+
+function startInTimeForCard(card) {
+  runInTimeRecall(card, {
+    onIteration: (iter, info) => {
+      // Brief on-screen progress: card-mode-tag gets a "iter N" suffix.
+      const baseTag = `${card.key} ${card.quality} · Aural recall · in time · ${card.bars} bar${card.bars > 1 ? 's' : ''}`;
+      $('card-mode-tag').textContent = `${baseTag} · iter ${iter} (${info.capturedCount}/${info.totalSlots})`;
+    },
+    onComplete: (success, info) => {
+      card.answered = true;
+      card.correct = success;
+      revealPhraseCard(card);
+      if (!success) {
+        if (typeof showToast === 'function') showToast(`Skipped — captured ${info.capturedCount}/${info.totalSlots} after ${info.iterations} loops`);
+      }
+      setTimeout(() => {
+        if (state.session && state.session.lastCard === card) nextCard();
+      }, success ? 620 : 1200);
+    }
+  });
 }
 
 // v1 stage 5 handler: tap reveals the staff; second tap advances.
 function handlePhraseCardTap(card) {
+  // In-time mode is loop-driven — don't allow a stray tap to interrupt.
+  if (card.interaction === 'aural-intime') {
+    if (card.answered) nextCard();
+    return;
+  }
   if (!card.revealed) {
     revealPhraseCard(card);
     return;

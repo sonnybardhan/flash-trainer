@@ -2143,6 +2143,8 @@ function endSession(save = true) {
   clearInterval(advanceInterval);
   stopMetronome();
   if (typeof stopAllPianoNotes === 'function') stopAllPianoNotes();
+  if (typeof stopInTimeRecall === 'function') stopInTimeRecall();
+  if (typeof stopPhrase === 'function') stopPhrase();
   if (!state.session) return;
 
   if (save) {
