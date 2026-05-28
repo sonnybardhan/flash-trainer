@@ -239,6 +239,16 @@ function revealPhraseCard(card) {
   renderPhrase(card.phrase, card.rootPitch, $('card-notation'));
 }
 
+// Pull chord tones + scale semitones off the active session anchor.
+// Used by both the per-card playback and the reference button.
+function _phraseChordOpts(card) {
+  if (!card || !card.phrase) return null;
+  const anchor = state.session && state.session.phraseAnchor;
+  const tones = anchor && anchor.context && anchor.context.chordTones;
+  if (!tones || tones.length === 0) return null;
+  return { tones, octaveOffset: -1, volume: 0.55 };
+}
+
 async function playPhraseCard(card) {
   if (card.interaction === 'aural-intime') {
     startInTimeForCard(card);
@@ -253,7 +263,7 @@ async function playPhraseCard(card) {
     return;
   }
   const bpm = (state.metronome && state.metronome.bpm) || 80;
-  await playPhrase(card.phrase, card.rootPitch, bpm);
+  await playPhrase(card.phrase, card.rootPitch, bpm, { chord: _phraseChordOpts(card) });
 }
 
 // Sing-back: play the phrase, give the user bars*4 beats of silence to
@@ -262,14 +272,13 @@ async function playPhraseCard(card) {
 async function runSingBackForCard(card) {
   const bpm = (state.metronome && state.metronome.bpm) || 80;
   const beatSec = 60 / Math.max(30, bpm);
-  await playPhrase(card.phrase, card.rootPitch, bpm);
+  const chord = _phraseChordOpts(card);
+  await playPhrase(card.phrase, card.rootPitch, bpm, { chord });
   // Pause for the user to sing back.
   const silenceSec = card.bars * 4 * beatSec;
   await new Promise(r => setTimeout(r, silenceSec * 1000));
-  // Bail out if the card changed (e.g. user skipped).
   if (!state.session || state.session.lastCard !== card) return;
-  await playPhrase(card.phrase, card.rootPitch, bpm);
-  // After the answer-play, reveal the staff so the user can compare.
+  await playPhrase(card.phrase, card.rootPitch, bpm, { chord });
   revealPhraseCard(card);
 }
 
@@ -310,7 +319,7 @@ function _phraseEventToDegreeId(ev) {
 // available scale degrees (same as the degree drill's chip set).
 async function startIdDegreesForCard(card) {
   const bpm = (state.metronome && state.metronome.bpm) || 80;
-  await playPhrase(card.phrase, card.rootPitch, bpm);
+  await playPhrase(card.phrase, card.rootPitch, bpm, { chord: _phraseChordOpts(card) });
   if (!state.session || state.session.lastCard !== card) return;
   const expectedDegrees = card.phrase.events
     .filter(e => e.kind === 'note')

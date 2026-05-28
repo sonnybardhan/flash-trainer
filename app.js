@@ -1631,10 +1631,12 @@ function renderCard(card) {
     playPhraseCard(card);
     setupMidiForCard(card);
     if (typeof showOnScreenKeyboardFor === 'function') showOnScreenKeyboardFor(card);
+    if ($('phrase-ref-btn')) $('phrase-ref-btn').style.display = '';
     return;
   }
-  // Non-phrase drills: ensure the keyboard is hidden.
+  // Non-phrase drills: ensure the keyboard + reference button are hidden.
   if (typeof hideOnScreenKeyboard === 'function') hideOnScreenKeyboard();
+  if ($('phrase-ref-btn')) $('phrase-ref-btn').style.display = 'none';
 
   // Chord drill — existing behavior.
   $('card-answer-chips').replaceChildren();
@@ -2184,6 +2186,20 @@ $('quit-x').addEventListener('click', () => endSession(false));
 // Replay button: play the current card's chord on demand, even if the
 // Play sound toggle is off. Audio context is primed inside this click
 // gesture so resume() is allowed.
+$('phrase-ref-btn').addEventListener('click', async () => {
+  if (!state.session || !state.session.phraseAnchor) return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  const anchor = state.session.phraseAnchor;
+  const bpm = (state.metronome && state.metronome.bpm) || 80;
+  await playPhraseReference({
+    rootPitch: anchor.rootPitch,
+    chordTones: anchor.context.chordTones,
+    scaleSemitones: anchor.context.available,
+    bpm
+  });
+});
+
 $('replay-btn').addEventListener('click', async () => {
   if (!state.session || !state.session.lastCard) return;
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
@@ -2199,7 +2215,7 @@ $('replay-btn').addEventListener('click', async () => {
   }
   if (card.drill === 'phrase') {
     const bpm = (state.metronome && state.metronome.bpm) || 80;
-    await playPhrase(card.phrase, card.rootPitch, bpm);
+    await playPhrase(card.phrase, card.rootPitch, bpm, { chord: _phraseChordOpts(card) });
     return;
   }
   const pitches = computePlaybackPitches(card);

@@ -100,8 +100,12 @@ function _scheduleIteration() {
   const r = _inTimeRun;
   r.iteration++;
 
-  // 1) Play the demo immediately.
-  playPhrase(r.card.phrase, r.card.rootPitch, r.bpm).catch(() => {});
+  // 1) Play the demo immediately, with the harmonic chord pad if the
+  // session anchor has chord tones.
+  const anchor = state.session && state.session.phraseAnchor;
+  const tones = anchor && anchor.context && anchor.context.chordTones;
+  const chord = (tones && tones.length) ? { tones, octaveOffset: -1, volume: 0.55 } : null;
+  playPhrase(r.card.phrase, r.card.rootPitch, r.bpm, { chord }).catch(() => {});
 
   // 2) After demo + count-in, open the echo window.
   const echoStartMs = (r.phraseDurationSec + r.countInSec) * 1000;
