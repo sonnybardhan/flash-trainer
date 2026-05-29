@@ -161,16 +161,7 @@ function rerenderCurrentCard() {
   // re-run the per-drill render.
   if (card.drill === 'interval') { renderIntervalCard(card); setupMidiForCard(card); return; }
   if (card.drill === 'degree')   { renderDegreeCard(card);   setupMidiForCard(card); return; }
-  const fc = $('flash-card');
-  fc.classList.toggle('format-notation', state.notation.format === 'notation');
-  fc.classList.toggle('format-text', state.notation.format === 'text');
-  fc.classList.toggle('notation-grand', state.notation.clef === 'both');
-  if (state.notation.format === 'notation') {
-    renderNotation(card, $('card-notation'));
-  } else {
-    $('card-notation').replaceChildren();
-  }
-  renderChordNameOverlay(card);
+  paintCardNotation(card);
   setupMidiForCard(card);
 }
 $('format-segment').addEventListener('click', (e) => {

@@ -104,13 +104,20 @@ function buildClosedVoicing(spelling, quality, inversion, baseOctave) {
 function placeChordInRange(spelling, quality, inversion, rangeLow, rangeHigh) {
   const lowSemi = pitchSemitones(parsePitchName(rangeLow));
   const highSemi = pitchSemitones(parsePitchName(rangeHigh));
+  let best = null, bestOverflow = Infinity;
   for (let oct = 1; oct <= 7; oct++) {
     const pitches = buildClosedVoicing(spelling, quality, inversion, oct);
     const loSemi = pitchSemitones(pitches[0]);
     const hiSemi = pitchSemitones(pitches[pitches.length - 1]);
     if (loSemi >= lowSemi && hiSemi <= highSemi) return pitches;
+    // Track the octave that pokes least outside [lo, hi] as a fallback.
+    const overflow = Math.max(0, lowSemi - loSemi) + Math.max(0, hiSemi - highSemi);
+    if (overflow < bestOverflow) { bestOverflow = overflow; best = pitches; }
   }
-  return null;
+  // No octave fits entirely (range narrower than the voicing's span). Return
+  // the closest fit instead of null so the card never renders blank
+  // ("chord out of range") — a ledger line or two beats a missing chord.
+  return best;
 }
 
 // Open voicing ("Spread 3" with the convention agreed for inversions):
@@ -130,6 +137,7 @@ function openVoicingLayout(spelling, quality, inversion) {
 function placeTonesInRange(tones, rangeLow, rangeHigh) {
   const lowSemi = pitchSemitones(parsePitchName(rangeLow));
   const highSemi = pitchSemitones(parsePitchName(rangeHigh));
+  let best = null, bestOverflow = Infinity;
   for (let oct = 1; oct <= 7; oct++) {
     const out = [];
     let prevSemi = -Infinity;
@@ -146,8 +154,11 @@ function placeTonesInRange(tones, rangeLow, rangeHigh) {
     const loS = pitchSemitones(out[0]);
     const hiS = pitchSemitones(out[out.length - 1]);
     if (loS >= lowSemi && hiS <= highSemi) return out;
+    const overflow = Math.max(0, lowSemi - loS) + Math.max(0, hiS - highSemi);
+    if (overflow < bestOverflow) { bestOverflow = overflow; best = out; }
   }
-  return null;
+  // Closest fit rather than null — see placeChordInRange.
+  return best;
 }
 
 function placeOpenVoicing(card, rangeLow, rangeHigh) {

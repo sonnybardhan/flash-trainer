@@ -310,7 +310,7 @@ function pianoLiveNoteOn(midi, velocity) {
   // create+resume the AudioContext here so live thru works before the user
   // has clicked anything.
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+    audioCtx = createAudioCtx();
   }
   if (audioCtx.state === 'suspended') {
     audioCtx.resume().catch(() => {});
@@ -382,7 +382,7 @@ async function previewChord(articulation) {
   const meter = state.metronome.meter || 4;
   // Need to prime the audio context if it hasn't been already. The click
   // handler that calls us is itself a user gesture, so resume() succeeds.
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  if (!audioCtx) audioCtx = createAudioCtx();
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   await playChord(pitches, { articulation, bpm, meter, direction });
 }

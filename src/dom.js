@@ -3,6 +3,27 @@
 // ============================================================
 const $ = (id) => document.getElementById(id);
 
+// Safe localStorage read — corrupt JSON (interrupted write, tampering, a
+// browser that throws on storage access) must never brick boot, so fall
+// back instead of throwing.
+function readJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch (e) {
+    console.warn(`[storage] corrupt value for "${key}", ignoring`, e);
+    return fallback;
+  }
+}
+
+// Restart a CSS transition on an element: remove the class, force a reflow
+// so the browser registers the removal, then re-add it.
+function retriggerTransition(el) {
+  el.classList.remove('transition');
+  void el.offsetWidth;
+  el.classList.add('transition');
+}
+
 function formatSpellingHTML(id) {
   if (id.includes('#')) return id[0] + '<span style="margin-left:1px;">♯</span>';
   if (id.length > 1 && id[1] === 'b') return id[0] + '<span style="margin-left:1px;">♭</span>';

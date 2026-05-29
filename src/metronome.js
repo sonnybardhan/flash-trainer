@@ -6,8 +6,14 @@ let metroState = { nextBeatTime: 0, currentBeat: 0, schedulerId: null, uiQueue: 
 const LOOKAHEAD_MS = 25;
 const SCHEDULE_AHEAD = 0.1;
 
+// Single factory for the shared AudioContext so the three creation sites
+// (metronome, MIDI-thru note-on, sound preview) stay in sync.
+function createAudioCtx() {
+  return new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+}
+
 async function ensureAudioContext() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+  if (!audioCtx) audioCtx = createAudioCtx();
   if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     try { await audioCtx.resume(); } catch (e) { /* iOS may reject outside user gesture */ }
   }

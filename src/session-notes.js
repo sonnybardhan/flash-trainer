@@ -153,7 +153,7 @@ function endSession(save = true) {
       startedAt: s.startedAt
     };
 
-    const history = JSON.parse(localStorage.getItem('triad-history') || '[]');
+    const history = readJSON('triad-history', []);
     history.push(record);
     localStorage.setItem('triad-history', JSON.stringify(history.slice(-100)));
   }

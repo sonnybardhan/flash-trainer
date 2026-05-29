@@ -17,7 +17,7 @@ function saveSettings() {
 }
 
 function loadSettings() {
-  const saved = JSON.parse(localStorage.getItem('triad-settings') || 'null');
+  const saved = readJSON('triad-settings', null);
   if (saved) {
     // Migration: old saves used pitch indices. Default to all if not present.
     state.selectedSpellings = new Set(saved.spellings || SPELLING_IDS);
@@ -37,7 +37,13 @@ function loadSettings() {
   }
 }
 
-window.addEventListener('beforeunload', saveSettings);
-setInterval(saveSettings, 5000);
+// Save on the events that actually fire reliably across platforms. The old
+// blind 5s setInterval churned localStorage every 5s for the whole session;
+// pagehide + visibilitychange(hidden) cover desktop close/refresh AND mobile
+// (where beforeunload is unreliable) without the constant writes.
+window.addEventListener('pagehide', saveSettings);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveSettings();
+});
 
 // ============================================================

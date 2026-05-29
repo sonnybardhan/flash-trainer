@@ -17,7 +17,7 @@ function renderCard(card) {
   if (card.drill === 'interval') {
     renderIntervalCard(card);
     $('stat-progress').textContent = progressText();
-    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    retriggerTransition(fc);
     maybePlayIntervalAudio(card);
     setupMidiForCard(card);
     return;
@@ -25,7 +25,7 @@ function renderCard(card) {
   if (card.drill === 'degree') {
     renderDegreeCard(card);
     $('stat-progress').textContent = progressText();
-    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    retriggerTransition(fc);
     // First card of the session plays chord + tone; subsequent cards just tone.
     if (!state.session.degreeIntroPlayed) {
       state.session.degreeIntroPlayed = true;
@@ -55,7 +55,7 @@ function renderCard(card) {
   if (card.drill === 'phrase') {
     renderPhraseCard(card);
     $('stat-progress').textContent = progressText();
-    fc.classList.remove('transition'); void fc.offsetWidth; fc.classList.add('transition');
+    retriggerTransition(fc);
     // Already-solved cards (navigated back to): show the staff
     // immediately, skip the playback + matcher arming.
     if (card.answered || card.revealed) {
@@ -83,6 +83,17 @@ function renderCard(card) {
     badge.className = 'card-focus-badge empty';
   }
   $('stat-progress').textContent = progressText();
+  paintCardNotation(card);
+  retriggerTransition(fc);
+  triggerPlayback(card);
+  setupMidiForCard(card);
+}
+
+// Paint the staff (or clear it, in text mode) for a chord card and sync the
+// flash-card's format/clef classes. Shared by renderCard and the mid-session
+// re-render path (rerenderCurrentCard) so the rules live in one place.
+function paintCardNotation(card) {
+  const fc = $('flash-card');
   fc.classList.toggle('format-notation', state.notation.format === 'notation');
   fc.classList.toggle('format-text', state.notation.format === 'text');
   fc.classList.toggle('notation-grand', state.notation.clef === 'both');
@@ -92,11 +103,6 @@ function renderCard(card) {
     $('card-notation').replaceChildren();
   }
   renderChordNameOverlay(card);
-  fc.classList.remove('transition');
-  void fc.offsetWidth;
-  fc.classList.add('transition');
-  triggerPlayback(card);
-  setupMidiForCard(card);
 }
 
 // Fire piano playback for the current card if the toggle is on.

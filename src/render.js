@@ -93,7 +93,7 @@ function renderFocusList() {
 
 function renderHistory() {
   const list = $('history-list');
-  const history = JSON.parse(localStorage.getItem('triad-history') || '[]');
+  const history = readJSON('triad-history', []);
   $('history-clear-btn').style.display = history.length > 0 ? 'inline-block' : 'none';
   if (history.length === 0) {
     list.innerHTML = '<div class="empty">No sessions yet</div>';
@@ -141,7 +141,7 @@ function renderHistory() {
     div.querySelector('.history-delete').onclick = (e) => {
       e.stopPropagation();
       const idx = +e.target.dataset.idx;
-      const hist = JSON.parse(localStorage.getItem('triad-history') || '[]');
+      const hist = readJSON('triad-history', []);
       const item = hist[idx];
       showModal({
         title: 'Delete this session?',
@@ -201,7 +201,7 @@ function updateCollapseMeta() {
   $('focus-meta').textContent = state.focusItems.length;
 
   // History meta
-  const historyCount = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length;
+  const historyCount = (readJSON('triad-history', [])).length;
   $('history-meta').textContent = historyCount;
 }
 

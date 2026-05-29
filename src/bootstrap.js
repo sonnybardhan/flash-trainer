@@ -124,7 +124,7 @@ loadNotationSettings();
 applyNotationSettingsToUI();
 
 // First-use heuristic: if history is empty, open Metronome + Focus by default
-const historyExists = (JSON.parse(localStorage.getItem('triad-history') || '[]')).length > 0;
+const historyExists = readJSON('triad-history', []).length > 0;
 if (!historyExists) {
   $('metronome-section').classList.add('open');
   $('focus-section').classList.add('open');
