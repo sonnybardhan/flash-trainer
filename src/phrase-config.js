@@ -43,17 +43,55 @@ function renderPhraseRhythmChips() {
       b.textContent = choice.id;
     }
     b.onclick = () => {
+      const prevMax = phraseDensityRange(
+        state.notation.phraseAllowedDurations, state.notation.phraseRestsIncluded !== false
+      ).max;
       const next = new Set(state.notation.phraseAllowedDurations || []);
       if (next.has(choice.id)) next.delete(choice.id); else next.add(choice.id);
       // Always keep at least one cadential group (quarter or half).
       if (!next.has('quarter') && !next.has('half')) next.add('quarter');
       state.notation.phraseAllowedDurations = Array.from(next);
+      syncPhraseMaxNotesSlider(prevMax);   // recompute bounds + clamp/track value
       saveNotationSettings();
       renderPhraseRhythmChips();
     };
     c.appendChild(b);
   }
 }
+
+// Sync the Max-notes/bar slider to the current rhythm + rests config.
+// prevMax = the max under the PREVIOUS config (pass it when the config just
+// changed) so a value sitting at the old ceiling tracks up to the new max
+// instead of silently becoming a cap.
+function syncPhraseMaxNotesSlider(prevMax = null) {
+  const ns = state.notation;
+  const { min, max } = phraseDensityRange(
+    ns.phraseAllowedDurations, ns.phraseRestsIncluded !== false
+  );
+  let v = ns.phraseMaxNotesPerBar;
+  if (v == null) v = max;                              // unset → no effective cap
+  else if (prevMax != null && v >= prevMax) v = max;   // was at ceiling → track up
+  v = Math.max(min, Math.min(max, v));                 // clamp into range
+  ns.phraseMaxNotesPerBar = v;
+
+  const slider = $('phrase-maxnotes-slider');
+  if (slider) {
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.value = String(v);
+    slider.disabled = (min === max);
+  }
+  const label = $('phrase-maxnotes-value');
+  if (label) label.textContent = String(v);
+}
+
+$('phrase-maxnotes-slider').addEventListener('input', (e) => {
+  state.notation.phraseMaxNotesPerBar = parseInt(e.target.value, 10);
+  const label = $('phrase-maxnotes-value');
+  if (label) label.textContent = e.target.value;
+  saveNotationSettings();
+});
+
 // Card-level "play note" button — degree drill only.
 $('card-tone-replay').addEventListener('click', async (e) => {
   e.stopPropagation(); // don't bubble to .flash-card (which would advance for chord drill)
