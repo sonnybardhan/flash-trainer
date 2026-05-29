@@ -49,6 +49,28 @@ const BEAT_GROUPS = {
 };
 const ALL_BEAT_GROUP_IDS = Object.keys(BEAT_GROUPS);
 
+// Dynamic note-density bounds for the phrase "max notes/bar" slider.
+//   max = densest all-sounding fill of a 4-beat bar (rhythm-only; rests can
+//         never raise the ceiling).
+//   min = 1 when rests are allowed (rest away all but one note), otherwise the
+//         sparsest all-sounding fill (2 with half-notes, else 4 for quarters).
+function phraseDensityRange(allowedDurations, restsIncluded) {
+  const allowed = (allowedDurations || []).filter(id => BEAT_GROUPS[id]);
+  if (allowed.length === 0) return { min: 1, max: 1 };
+  let maxEventsPerBeat = 0;   // densest group → ceiling
+  let maxBeatsPerNote = 0;    // sparsest group → rests-off floor
+  for (const id of allowed) {
+    const g = BEAT_GROUPS[id];
+    const eventsPerBeat = g.events.length / g.beats;
+    const beatsPerNote = g.beats / g.events.length;
+    if (eventsPerBeat > maxEventsPerBeat) maxEventsPerBeat = eventsPerBeat;
+    if (beatsPerNote > maxBeatsPerNote) maxBeatsPerNote = beatsPerNote;
+  }
+  const max = Math.round(4 * maxEventsPerBeat);
+  const min = restsIncluded ? 1 : Math.round(4 / maxBeatsPerNote);
+  return { min, max };
+}
+
 // Beat strengths in 4/4. Index = beat-1 (0..3). 1 > 3 > 2 = 4.
 const METER_STRENGTH_4_4 = [1.0, 0.4, 0.7, 0.4];
 
