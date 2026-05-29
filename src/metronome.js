@@ -55,7 +55,7 @@ async function startMetronome() {
   metroState.uiQueue = [];
   metroState.schedulerId = setInterval(metroScheduler, LOOKAHEAD_MS);
   requestAnimationFrame(updatePulseUI);
-  $('metro-indicator').style.display = 'flex';
+  $('metro-indicator').classList.remove('off');
   updateMetroDisplay();
 }
 
@@ -63,7 +63,7 @@ function stopMetronome() {
   if (metroState.schedulerId) clearInterval(metroState.schedulerId);
   metroState.schedulerId = null;
   metroState.uiQueue = [];
-  $('metro-indicator').style.display = 'none';
+  $('metro-indicator').classList.add('off');
   $('metro-panel').classList.remove('open');
   $('pulse-dot').className = 'pulse-dot';
 }
