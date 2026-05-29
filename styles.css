@@ -1373,3 +1373,9 @@
   .maxnotes-control .ios-slider { flex: 1; }
   .maxnotes-value { min-width: 2ch; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
   .ios-slider:disabled { opacity: 0.5; }
+
+  /* Live metronome toggle */
+  .metronome-indicator.off { opacity: 0.55; }
+  .metronome-indicator.off .pulse-dot { opacity: 0.3; animation: none; }
+  .switch.locked { opacity: 0.5; pointer-events: none; }
+  .metro-panel-hint { font-size: 11px; color: var(--muted, #888); padding: 0 0 6px; }
