@@ -634,6 +634,23 @@
 <script src="phrases.js"></script>
 <script src="keyboard.js"></script>
 <script src="midi.js"></script>
-<script src="app.js"></script>
+<!-- app.js split into concern-grouped modules; load order = original source order -->
+<script src="src/theory.js"></script>
+<script src="src/state.js"></script>
+<script src="src/dom.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui-shell.js"></script>
+<script src="src/difficulty.js"></script>
+<script src="src/notation-settings.js"></script>
+<script src="src/drill-config.js"></script>
+<script src="src/phrase-config.js"></script>
+<script src="src/sound-eq.js"></script>
+<script src="src/deck.js"></script>
+<script src="src/card.js"></script>
+<script src="src/metronome.js"></script>
+<script src="src/session-run.js"></script>
+<script src="src/session-notes.js"></script>
+<script src="src/persistence.js"></script>
+<script src="src/bootstrap.js"></script>
 </body>
 </html>
