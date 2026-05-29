@@ -68,6 +68,15 @@ function stopMetronome() {
   $('pulse-dot').className = 'pulse-dot';
 }
 
+// Realign the running metronome so an accented downbeat lands exactly at
+// `audioTime` (audioCtx clock). Used to sync clicks to phrase playback.
+// No-op if the metronome isn't running.
+function syncMetronomeToTime(audioTime) {
+  if (!metroState.schedulerId) return;
+  metroState.nextBeatTime = audioTime;
+  metroState.currentBeat = 0;
+}
+
 function updateMetroDisplay() {
   $('metro-display').textContent = `${state.metronome.bpm} bpm`;
 }

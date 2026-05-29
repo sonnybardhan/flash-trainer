@@ -83,6 +83,13 @@ async function playPhrase(phrase, rootPitch, bpm, opts = {}) {
                : 0;
   }
 
+  // Keep the metronome's accented downbeat aligned to the first melody note
+  // (silent through the chord prelude, then ticking with the melody).
+  if (typeof state !== 'undefined' && state.metronome && state.metronome.enabled &&
+      typeof syncMetronomeToTime === 'function') {
+    syncMetronomeToTime(t0 + preludeSec);
+  }
+
   // Melody starts after the chord prelude (if any). Without a prelude
   // this is 0 and the melody starts at t0.
   let lastEnd = preludeSec + phraseDurSec;
