@@ -253,7 +253,13 @@ function resetPhraseAttempt(card) {
     if (typeof resetInTimeCapture === 'function') resetInTimeCapture();
     return;
   }
-  // aural-free / sing-back: re-hide the staff and replay the phrase.
+  if (card.interaction === 'aural-free') {
+    // Re-arm the sequence matcher (progress → 0) and redraw the dots so you
+    // play back from the first note again. No replay.
+    if (typeof setupMidiForCard === 'function') setupMidiForCard(card);
+    return;
+  }
+  // sing-back: nothing captured to clear — re-hide the staff and replay.
   card.revealed = false;
   $('card-notation').replaceChildren();
   updatePhraseRevealBtn(card);
