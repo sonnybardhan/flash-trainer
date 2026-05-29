@@ -1367,3 +1367,9 @@
     .drill-segment .segment { padding: 8px 4px; font-size: 11px; }
     .answer-chip { padding: 10px 4px; font-size: 13px; }
   }
+
+  /* Phrase note-density slider */
+  .maxnotes-control { display: flex; align-items: center; gap: 12px; flex: 1; }
+  .maxnotes-control .ios-slider { flex: 1; }
+  .maxnotes-value { min-width: 2ch; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+  .ios-slider:disabled { opacity: 0.5; }
