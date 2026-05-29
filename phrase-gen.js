@@ -321,7 +321,7 @@ function durationBeats(duration) {
 
 const VALIDATION_OK = null;
 
-function validatePhrase(assignments, context, bars) {
+function validatePhrase(assignments, context, bars, maxNotesPerBar = Infinity) {
   if (assignments.length === 0) return { code: 'empty' };
 
   const final = assignments[assignments.length - 1];
@@ -408,6 +408,15 @@ function validatePhrase(assignments, context, bars) {
     const barHas = assignments.some(a => a.slot.bar === b && a.kind === 'note');
     if (!barHas) return { code: 'barWithoutSoundingPitch', bar: b };
   }
+  // Per-bar sounding-note cap (note-density slider). Counts only notes, not
+  // rests. Reuses the retry loop: an over-cap candidate is rejected and the
+  // composer tries again; if no candidate fits, generatePhrase throws.
+  if (maxNotesPerBar !== Infinity) {
+    for (let b = 1; b <= bars; b++) {
+      const n = assignments.filter(a => a.slot.bar === b && a.kind === 'note').length;
+      if (n > maxNotesPerBar) return { code: 'tooManyNotesInBar', bar: b, count: n, max: maxNotesPerBar };
+    }
+  }
   // No rests inside triplet groups.
   const tripletGroups = new Map();
   for (const a of assignments) {
@@ -440,6 +449,7 @@ function nextSounding(assignments, fromIdx) {
 
 function generatePhrase({ context, bars = 1,
                           allowedDurations = ['half', 'quarter', 'eighthPair'],
+                          maxNotesPerBar = Infinity,
                           maxAttempts = 200, rng = Math.random }) {
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -451,7 +461,7 @@ function generatePhrase({ context, bars = 1,
     }
     let assignments = samplePitches(template, context, rng);
     assignments = insertRests(assignments, context, bars, rng);
-    const err = validatePhrase(assignments, context, bars);
+    const err = validatePhrase(assignments, context, bars, maxNotesPerBar);
     if (err) { lastError = err; continue; }
     return {
       phrase: { templateId: template.id, bars, events: assignments.map(toEvent) },
