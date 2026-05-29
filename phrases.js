@@ -336,7 +336,7 @@ function startInTimeForCard(card) {
       }
       setTimeout(() => {
         if (state.session && state.session.lastCard === card) nextCard();
-      }, success ? 620 : 1200);
+      }, 2000);
     }
   });
 }
@@ -421,7 +421,7 @@ function _handlePhraseIdDegreeTap(card, pickedId) {
     revealPhraseCard(card);
     setTimeout(() => {
       if (state.session && state.session.lastCard === card) nextCard();
-    }, 700);
+    }, 2000);
   }
 }
 
