@@ -129,6 +129,21 @@ $('session-display-tap').addEventListener('click', (e) => {
   $('session-panel').classList.toggle('open');
 });
 
+$('live-metro-switch').addEventListener('click', (e) => {
+  e.stopPropagation();
+  // Locked on while beats/bars advance drives the clock.
+  if ($('live-metro-switch').classList.contains('locked')) return;
+  state.metronome.enabled = !state.metronome.enabled;
+  if (state.metronome.enabled) startMetronome(); else stopMetronome();
+  $('live-metro-switch').classList.toggle('on', state.metronome.enabled);
+  // Mirror to the config-screen control so the choice persists past the session.
+  $('metro-switch').classList.toggle('on', state.metronome.enabled);
+  $('bpm-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+  $('meter-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+  $('accent-row').style.display = state.metronome.enabled ? 'flex' : 'none';
+  updateCollapseMeta();
+});
+
 function updateLiveSessionUI() {
   if (!state.session) return;
   const s = state.session;
