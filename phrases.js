@@ -233,12 +233,38 @@ function renderPhraseCard(card) {
   label.textContent = '';
   label.classList.add('hidden');
   label.classList.remove('correct', 'wrong');
+  updatePhraseRevealBtn(card);
 }
 
 function revealPhraseCard(card) {
   if (card.revealed) return;
   card.revealed = true;
   renderPhrase(card.phrase, card.rootPitch, $('card-notation'));
+}
+
+// Show/hide the staff for an aural-free card via the dedicated button.
+// Other interactions reveal on their own and don't show the button.
+function updatePhraseRevealBtn(card) {
+  const btn = $('phrase-reveal-btn');
+  if (!btn) return;
+  if (!card || card.drill !== 'phrase' || card.interaction !== 'aural-free') {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = 'block';
+  btn.textContent = card.revealed ? 'Hide' : 'Reveal';
+}
+
+function togglePhraseReveal(card) {
+  if (!card || card.drill !== 'phrase' || card.interaction !== 'aural-free') return;
+  if (card.revealed) {
+    card.revealed = false;
+    $('card-notation').replaceChildren();
+  } else {
+    card.revealed = true;
+    renderPhrase(card.phrase, card.rootPitch, $('card-notation'));
+  }
+  updatePhraseRevealBtn(card);
 }
 
 // Chord pad options for a card's playback. Returns null UNLESS this
@@ -399,16 +425,8 @@ function _handlePhraseIdDegreeTap(card, pickedId) {
   }
 }
 
-// v1 stage 5 handler: tap reveals the staff; second tap advances.
+// Card-body taps are inert for phrases — reveal is the dedicated button,
+// advance is the forward arrow (or auto-advance on correct / on the clock).
 function handlePhraseCardTap(card) {
-  // In-time + ID-degrees are quiz-driven — only advance once answered.
-  if (card.interaction === 'aural-intime' || card.interaction === 'id-degrees') {
-    if (card.answered) nextCard();
-    return;
-  }
-  if (!card.revealed) {
-    revealPhraseCard(card);
-    return;
-  }
-  nextCard();
+  return;
 }

@@ -93,6 +93,11 @@ $('phrase-maxnotes-slider').addEventListener('input', (e) => {
 });
 
 // Card-level "play note" button — degree drill only.
+$('phrase-reveal-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const c = state.session && state.session.lastCard;
+  if (c && c.drill === 'phrase') togglePhraseReveal(c);
+});
 $('card-tone-replay').addEventListener('click', async (e) => {
   e.stopPropagation(); // don't bubble to .flash-card (which would advance for chord drill)
   if (!state.session || !state.session.lastCard) return;
