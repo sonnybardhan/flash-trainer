@@ -141,7 +141,8 @@ function buildPhraseSessionAnchor() {
     allowedDurations: (ns.phraseAllowedDurations && ns.phraseAllowedDurations.length)
                        ? ns.phraseAllowedDurations
                        : PHRASE_ALLOWED_DEFAULT,
-    interaction: ns.phraseInteraction || 'aural-free'
+    interaction: ns.phraseInteraction || 'aural-free',
+    maxNotesPerBar: (typeof ns.phraseMaxNotesPerBar === 'number') ? ns.phraseMaxNotesPerBar : Infinity
   };
 }
 
@@ -155,6 +156,7 @@ function buildPhraseCard() {
       context: anchor.context,
       bars: anchor.bars,
       allowedDurations: anchor.allowedDurations,
+      maxNotesPerBar: anchor.maxNotesPerBar,
       maxAttempts: 200
     });
   } catch (e) {
