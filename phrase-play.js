@@ -66,7 +66,10 @@ async function playPhrase(phrase, rootPitch, bpm, opts = {}) {
     const chordOctOff = opts.chord.octaveOffset != null ? opts.chord.octaveOffset : -1;
     const chordVol = opts.chord.volume != null ? opts.chord.volume : 0.55;
     const preludeBars = opts.chord.preludeBars || 0;
-    const chordDur = preludeBars > 0
+    const fixedPrelude = opts.chord.preludeSec || 0;   // fixed seconds; overrides bars
+    const chordDur = fixedPrelude > 0
+      ? fixedPrelude                     // fixed solo prelude (tempo-independent)
+      : preludeBars > 0
       ? preludeBars * 4 * beatSec        // solo prelude — stop when melody starts
       : phraseDurSec + 0.2;              // legacy: pad under the whole phrase
     for (const semi of opts.chord.tones) {
@@ -75,7 +78,9 @@ async function playPhrase(phrase, rootPitch, bpm, opts = {}) {
                                           t0, midi, chordDur, chordVol);
       if (env) _phraseEnvelopes.push(env);
     }
-    preludeSec = preludeBars > 0 ? preludeBars * 4 * beatSec : 0;
+    preludeSec = fixedPrelude > 0 ? fixedPrelude
+               : preludeBars > 0 ? preludeBars * 4 * beatSec
+               : 0;
   }
 
   // Melody starts after the chord prelude (if any). Without a prelude

@@ -283,7 +283,7 @@ function _phraseChordOpts(card) {
   state.session.phraseChordIntroPlayed = true;
   // preludeBars: chord plays SOLO for this many bars, then the melody
   // starts. Mirrors the degree drill's chord-then-tone intro.
-  return { tones, octaveOffset: -1, volume: 0.6, preludeBars: 1 };
+  return { tones, octaveOffset: -1, volume: 0.6, preludeSec: 2.0 };
 }
 
 async function playPhraseCard(card) {
