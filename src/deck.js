@@ -149,8 +149,14 @@ function previousCard() {
 //     viewed (the user has already seen the answer or the prompt)
 function cardIsSolved(card) {
   if (!card) return false;
-  if (card.drill === 'degree' || card.drill === 'phrase') {
-    return !!card.answered;
+  if (card.drill === 'degree') return !!card.answered;
+  if (card.drill === 'phrase') {
+    // Quiz modes gate the forward arrow on a correct answer; aural-free and
+    // sing-back can be advanced any time (solved on view).
+    if (card.interaction === 'aural-intime' || card.interaction === 'id-degrees') {
+      return !!card.answered;
+    }
+    return true;
   }
   return true;
 }
@@ -169,6 +175,12 @@ function updateNavButtons() {
   // when the current card is solved and a new card can be built.
   const hasFuture = s.historyIdx < s.history.length - 1;
   fwdBtn.disabled = !(hasFuture || cardIsSolved(s.lastCard));
+  // "Ready" highlight: a correctly-answered proceed-on-correct phrase card.
+  const lc = s.lastCard;
+  const ready = !!(lc && lc.drill === 'phrase' &&
+    (lc.interaction === 'aural-intime' || lc.interaction === 'id-degrees') &&
+    lc.answered && lc.correct !== false);
+  fwdBtn.classList.toggle('ready', ready);
 }
 
 function progressText() {
