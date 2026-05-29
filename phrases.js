@@ -234,6 +234,29 @@ function renderPhraseCard(card) {
   label.classList.add('hidden');
   label.classList.remove('correct', 'wrong');
   updatePhraseRevealBtn(card);
+  updatePhraseResetBtn(card);
+}
+
+// Reset just the input progress for the current attempt — no replay, no new
+// phrase. Only the note-input modes (ID-degrees, in-time recall) have progress.
+function resetPhraseAttempt(card) {
+  if (!card || card.drill !== 'phrase' || card.answered) return;
+  if (card.interaction === 'id-degrees') {
+    card.degreeIndex = 0;
+    card.wrongDegreeTaps = 0;
+    _renderPhraseIdDegreeChips(card);   // re-renders chips active + "1 / N" label
+  } else if (card.interaction === 'aural-intime') {
+    if (typeof resetInTimeCapture === 'function') resetInTimeCapture();
+  }
+}
+
+// Show the Reset button only in the note-input modes, while unanswered.
+function updatePhraseResetBtn(card) {
+  const btn = $('phrase-reset-btn');
+  if (!btn) return;
+  const show = !!(card && card.drill === 'phrase' && !card.answered &&
+    (card.interaction === 'id-degrees' || card.interaction === 'aural-intime'));
+  btn.style.display = show ? '' : 'none';
 }
 
 function revealPhraseCard(card) {

@@ -95,6 +95,15 @@ function stopInTimeRecall() {
   _inTimeRun = null;
 }
 
+// Clear captured/wrong progress for the active in-time run without replaying.
+// The loop keeps running; the next echo window re-captures from scratch.
+function resetInTimeCapture() {
+  if (!_inTimeRun) return;
+  _inTimeRun.captured.clear();
+  _inTimeRun.wrong.clear();
+  if (typeof renderPhraseDots === 'function') renderPhraseDots(_inTimeRun.slots.length);
+}
+
 function _scheduleIteration() {
   if (!_inTimeRun || _inTimeRun.cancelled) return;
   const r = _inTimeRun;

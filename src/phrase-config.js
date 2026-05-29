@@ -98,6 +98,11 @@ $('phrase-reveal-btn').addEventListener('click', (e) => {
   const c = state.session && state.session.lastCard;
   if (c && c.drill === 'phrase') togglePhraseReveal(c);
 });
+$('phrase-reset-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const c = state.session && state.session.lastCard;
+  if (c && c.drill === 'phrase') resetPhraseAttempt(c);
+});
 $('card-tone-replay').addEventListener('click', async (e) => {
   e.stopPropagation(); // don't bubble to .flash-card (which would advance for chord drill)
   if (!state.session || !state.session.lastCard) return;
