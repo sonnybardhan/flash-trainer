@@ -60,6 +60,7 @@ function applyNotationSettingsToUI() {
   setActiveSegment('phrase-interaction-segment', 'phraseInteraction', ns.phraseInteraction || 'aural-free');
   renderPhraseRhythmChips();
   $('phrase-rests-switch').classList.toggle('on', ns.phraseRestsIncluded !== false);
+  syncPhraseMaxNotesSlider();   // resolve null→current max, set slider bounds/value
   updateDrillVisibility();
   updateNotationRowVisibility();
 }
