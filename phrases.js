@@ -237,26 +237,36 @@ function renderPhraseCard(card) {
   updatePhraseResetBtn(card);
 }
 
-// Reset just the input progress for the current attempt — no replay, no new
-// phrase. Only the note-input modes (ID-degrees, in-time recall) have progress.
+// Start the current example over. Input modes (ID-degrees, in-time) clear
+// their progress without replaying; aural-free / sing-back re-hide the staff
+// and replay the phrase from the top (their only meaningful "start over").
+// Never generates a new phrase.
 function resetPhraseAttempt(card) {
   if (!card || card.drill !== 'phrase' || card.answered) return;
   if (card.interaction === 'id-degrees') {
     card.degreeIndex = 0;
     card.wrongDegreeTaps = 0;
     _renderPhraseIdDegreeChips(card);   // re-renders chips active + "1 / N" label
-  } else if (card.interaction === 'aural-intime') {
-    if (typeof resetInTimeCapture === 'function') resetInTimeCapture();
+    return;
   }
+  if (card.interaction === 'aural-intime') {
+    if (typeof resetInTimeCapture === 'function') resetInTimeCapture();
+    return;
+  }
+  // aural-free / sing-back: re-hide the staff and replay the phrase.
+  card.revealed = false;
+  $('card-notation').replaceChildren();
+  updatePhraseRevealBtn(card);
+  if (typeof stopPhrase === 'function') stopPhrase();
+  const bpm = (state.metronome && state.metronome.bpm) || 80;
+  playPhrase(card.phrase, card.rootPitch, bpm);
 }
 
-// Show the Reset button only in the note-input modes, while unanswered.
+// Show the Reset button for every phrase mode, while the card is unanswered.
 function updatePhraseResetBtn(card) {
   const btn = $('phrase-reset-btn');
   if (!btn) return;
-  const show = !!(card && card.drill === 'phrase' && !card.answered &&
-    (card.interaction === 'id-degrees' || card.interaction === 'aural-intime'));
-  btn.style.display = show ? '' : 'none';
+  btn.style.display = (card && card.drill === 'phrase' && !card.answered) ? '' : 'none';
 }
 
 function revealPhraseCard(card) {
