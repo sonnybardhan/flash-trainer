@@ -287,8 +287,12 @@ $('phrase-interaction-segment').addEventListener('click', (e) => {
   saveNotationSettings();
 });
 $('phrase-rests-switch').addEventListener('click', () => {
+  const prevMax = phraseDensityRange(
+    state.notation.phraseAllowedDurations, state.notation.phraseRestsIncluded !== false
+  ).max;
   state.notation.phraseRestsIncluded = state.notation.phraseRestsIncluded === false;
   $('phrase-rests-switch').classList.toggle('on', state.notation.phraseRestsIncluded);
+  syncPhraseMaxNotesSlider(prevMax);   // rests toggle moves the min; re-clamp
   saveNotationSettings();
 });
 
