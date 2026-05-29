@@ -1210,7 +1210,12 @@
   .flash-card.drill-degrees   .card-quality,
   .flash-card.drill-degrees   .card-inversion,
   .flash-card.drill-degrees   .card-focus-badge,
-  .flash-card.drill-degrees   .card-name-overlay { display: none; }
+  .flash-card.drill-degrees   .card-name-overlay,
+  .flash-card.drill-phrases   .card-root,
+  .flash-card.drill-phrases   .card-quality,
+  .flash-card.drill-phrases   .card-inversion,
+  .flash-card.drill-phrases   .card-focus-badge,
+  .flash-card.drill-phrases   .card-name-overlay { display: none; }
 
   /* Degree drill: notation only rendered on reveal; pre-answer stays empty */
   .flash-card.drill-degrees .card-notation { min-height: 220px; }
@@ -1379,3 +1384,24 @@
   .metronome-indicator.off .pulse-dot { opacity: 0.3; animation: none; }
   .switch.locked { opacity: 0.5; pointer-events: none; }
   .metro-panel-hint { font-size: 11px; color: var(--muted, #888); padding: 0 0 6px; }
+
+  /* Phrase drill: centered staff, reserved height (no layout shift), reveal button */
+  .flash-card.drill-phrases .card-notation { margin-left: auto; margin-right: auto; min-height: 220px; }
+  #phrase-reveal-btn {
+    display: none;
+    margin: 14px auto 0;
+    padding: 8px 22px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface, rgba(255,255,255,0.06));
+    border: 1px solid var(--border, rgba(255,255,255,0.18));
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  #phrase-reveal-btn:active { transform: scale(0.96); }
+  .nav-btn.ready {
+    color: var(--accent, #6ea8fe);
+    border-color: var(--accent, #6ea8fe);
+    box-shadow: 0 0 0 2px var(--accent, #6ea8fe) inset;
+  }
