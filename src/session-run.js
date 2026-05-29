@@ -159,7 +159,11 @@ $('start-btn').addEventListener('click', () => {
   if (!state.session) return;
   startTimer();
   if (effectiveAdvance === 'seconds') startAutoAdvance();
+  // The metronome indicator is visible for the whole session; the live switch
+  // in its panel toggles it. startMetronome() clears the 'off' class.
+  $('metro-indicator').style.display = 'flex';
   if (state.metronome.enabled) startMetronome();
+  else $('metro-indicator').classList.add('off');
 });
 
 let timerInterval, advanceInterval;
@@ -219,6 +223,12 @@ function updateLiveAdvanceUI() {
   $('advance-display').textContent = labels[a] || 'Tap';
   // Mirror MIDI-option visibility from the home select onto the live one.
   $('live-advance-option-midi').hidden = $('advance-option-midi').hidden;
+  // Live metronome switch: reflects enabled; locked on when advance needs the
+  // beat clock (beats/bars drive card advancement).
+  const metroLocked = (a === 'beats' || a === 'bars');
+  $('live-metro-switch').classList.toggle('on', state.metronome.enabled);
+  $('live-metro-switch').classList.toggle('locked', metroLocked);
+  $('live-metro-hint').style.display = metroLocked ? '' : 'none';
 }
 
 $('flash-card').addEventListener('click', (e) => {
