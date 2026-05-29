@@ -39,7 +39,8 @@ const state = {
     phraseBars: 1,               // 1 | 2 | 4
     phraseInteraction: 'aural-free',  // aural-free | aural-intime | sing | id-degrees
     phraseAllowedDurations: ['quarter','half','eighthPair'],
-    phraseRestsIncluded: true    // mirrors CET's allowRests boolean
+    phraseRestsIncluded: true,   // mirrors CET's allowRests boolean
+    phraseMaxNotesPerBar: null   // per-bar sounding-note cap; null = no cap (resolves to current max on load)
   }
 };
 
